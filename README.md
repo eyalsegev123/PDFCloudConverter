@@ -30,7 +30,3 @@
 - **Cloud Services**: AWS S3, SQS, EC2  
 - **Build Tool**: Maven  
 
-## **How to Use**
-1. Clone the repository:  
-   ```bash
-   git clone https://github.com/yourusername/PDFCloudConverter.git
