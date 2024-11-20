@@ -24,12 +24,14 @@ public class AWS {
     protected final Ec2Client ec2;
     protected final String bucketName;
     protected static AWS instance = null;
-
+    protected int localAppCounter;
+    
     protected AWS() {
         this.s3 = S3Client.builder().region(region1).build();
         this.sqs = SqsClient.builder().region(region1).build();
         this.ec2 = Ec2Client.builder().region(region1).build();
         this.bucketName = "my-bucket";
+        this.localAppCounter = 0;
     }
 
     public static AWS getInstance() {
@@ -304,6 +306,63 @@ public class AWS {
 
         return Integer.parseInt(attributes.get(QueueAttributeName.APPROXIMATE_NUMBER_OF_MESSAGES));
     }
+
+    public void sendSQSMessage(String messageBody, String SQSUrl) {
+        SendMessageRequest request = SendMessageRequest.builder()
+            .queueUrl(SQSUrl)
+            .messageBody(messageBody)
+            .build();
+
+        sqs.sendMessage(request);
+        System.out.println("Message sent to queue: " + SQSUrl + "/nMessage Sent: " + messageBody);
+    }
+
+    public List<Message> getSQSMessagesList(String queueUrl) {
+        try {
+            // Create a ReceiveMessageRequest to fetch messages from the queue
+            ReceiveMessageRequest receiveMessageRequest = ReceiveMessageRequest.builder()
+                    .queueUrl(queueUrl)
+                    .maxNumberOfMessages(10) // Fetch up to 10 messages at a time
+                    .waitTimeSeconds(20)    // Long polling for 20 seconds
+                    .build();
+
+            // Fetch messages
+            List<Message> messages = sqs.receiveMessage(receiveMessageRequest).messages();
+
+            if (messages.isEmpty()) {
+                System.out.println("No messages received yet.");
+            }
+            return messages;
+
+        } catch (Exception e) {
+            System.err.println("Error while receiving messages: " + e.getMessage());
+            return Collections.emptyList(); // Return an empty list in case of an exception
+        }
+    }
+
+    public void deleteMessage(String queueUrl, String receiptHandle) {
+        try {
+            // Create a DeleteMessageRequest
+            DeleteMessageRequest deleteMessageRequest = DeleteMessageRequest.builder()
+                    .queueUrl(queueUrl)
+                    .receiptHandle(receiptHandle)
+                    .build();
+    
+            // Delete the message from the queue
+            sqs.deleteMessage(deleteMessageRequest);
+            System.out.println("Message deleted successfully.");
+        } catch (Exception e) {
+            System.err.println("Error while deleting message: " + e.getMessage());
+        }
+    }
+
+    public int getLocalAppCounter() {
+        this.localAppCounter++;
+        return this.localAppCounter-1; //the earlier counter
+    }
+    
+
+
 
 
     ///////////////////////
