@@ -8,7 +8,6 @@ import software.amazon.awssdk.services.sqs.model.Message;
 import software.amazon.awssdk.services.sqs.model.SendMessageRequest;
 
 import java.io.File;
-import java.nio.file.NoSuchFileException;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
 
