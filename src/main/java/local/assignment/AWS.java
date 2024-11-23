@@ -17,21 +17,19 @@ import java.util.*;
 
 public class AWS {
 
-    public final String IMAGE_AMI = "ami-08902199a8aa0bc09";
+    public final String IMAGE_AMI = "ami-04aabd45b36980079";
     public Region region1 = Region.US_WEST_2;
     protected final S3Client s3;
     protected final SqsClient sqs;
     protected final Ec2Client ec2;
     protected final String bucketName;
     protected static AWS instance = null;
-    protected int localAppCounter;
     
     protected AWS() {
         this.s3 = S3Client.builder().region(region1).build();
         this.sqs = SqsClient.builder().region(region1).build();
         this.ec2 = Ec2Client.builder().region(region1).build();
-        this.bucketName = "my-bucket";
-        this.localAppCounter = 0;
+        this.bucketName = "malawach";
     }
 
     public static AWS getInstance() {
@@ -242,7 +240,6 @@ public class AWS {
         }
     }
     
-
     private void deleteEmptyBucket(String bucketName) {
         DeleteBucketRequest deleteBucketRequest = DeleteBucketRequest.builder()
                 .bucket(bucketName)
@@ -356,10 +353,6 @@ public class AWS {
         }
     }
 
-    public int getLocalAppCounter() {
-        this.localAppCounter++;
-        return this.localAppCounter-1; //the earlier counter
-    }
     
 
 

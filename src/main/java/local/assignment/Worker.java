@@ -1,6 +1,6 @@
-package local.assignment;
+// package local.assignment;
 
 
-public class Worker{
+// public class Worker{
     
-}
+// }
