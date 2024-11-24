@@ -4,7 +4,6 @@ import software.amazon.awssdk.services.ec2.model.Instance;
 import software.amazon.awssdk.services.ec2.model.InstanceStateName;
 import software.amazon.awssdk.services.ec2.model.RunInstancesResponse;
 import software.amazon.awssdk.services.ec2.model.StartInstancesRequest;
-import software.amazon.awssdk.services.ec2.model.StartInstancesResponse;
 import software.amazon.awssdk.services.sqs.model.Message;
 import software.amazon.awssdk.services.ec2.model.Tag;
 import software.amazon.awssdk.services.ec2.model.CreateTagsRequest;
