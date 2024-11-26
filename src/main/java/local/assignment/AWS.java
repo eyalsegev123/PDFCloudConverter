@@ -9,6 +9,7 @@ import software.amazon.awssdk.services.s3.model.*;
 import software.amazon.awssdk.services.s3.paginators.ListObjectsV2Iterable;
 import software.amazon.awssdk.services.sqs.SqsClient;
 import software.amazon.awssdk.services.sqs.model.*;
+import software.amazon.awssdk.services.ec2.model.Tag;
 
 
 import java.io.*;
@@ -40,6 +41,19 @@ public class AWS {
     }
 
     ////////////////////////////////////////// EC2
+    
+    public void startInstance(String instanceId) {
+        try {
+            StartInstancesRequest startRequest = StartInstancesRequest.builder()
+                .instanceIds(instanceId)
+                .build();
+            ec2.startInstances(startRequest);
+            System.out.println("Manager node activated: " + instanceId);
+        } catch (Exception e) {
+            System.err.println("Failed to start instance: " + instanceId);
+            e.printStackTrace();
+        }
+    }
 
     public void runInstanceFromAMI(String ami) {
         RunInstancesRequest runInstancesRequest = RunInstancesRequest.builder()
@@ -264,6 +278,21 @@ public class AWS {
         }
     }
 
+    public void tagInstanceAsManager(String instanceId) {
+        try {
+            Tag managerTag = Tag.builder().key("Label").value("Manager").build();
+            CreateTagsRequest createTagsRequest = CreateTagsRequest.builder()
+                .resources(instanceId)
+                .tags(managerTag)
+                .build();
+            ec2.createTags(createTagsRequest);
+            System.out.println("New Manager node tagged: " + instanceId);
+        } catch (Exception e) {
+            System.err.println("Failed to tag instance: " + instanceId);
+            e.printStackTrace();
+        }
+    }
+
     ////////////////////////////////////////////// SQS
 
     public String createQueue(String queueName) {
@@ -314,13 +343,13 @@ public class AWS {
         System.out.println("Message sent to queue: " + SQSUrl + "/nMessage Sent: " + messageBody);
     }
 
-    public List<Message> getSQSMessagesList(String queueUrl) {
+    public List<Message> getSQSMessagesList(String queueUrl, Integer maxNumberOfMessages, Integer waitTimeSeconds) {
         try {
             // Create a ReceiveMessageRequest to fetch messages from the queue
             ReceiveMessageRequest receiveMessageRequest = ReceiveMessageRequest.builder()
                     .queueUrl(queueUrl)
-                    .maxNumberOfMessages(10) // Fetch up to 10 messages at a time
-                    .waitTimeSeconds(20)    // Long polling for 20 seconds
+                    .maxNumberOfMessages(maxNumberOfMessages) // Fetch up to x messages at a time
+                    .waitTimeSeconds(waitTimeSeconds)    // Long polling for y seconds
                     .build();
 
             // Fetch messages

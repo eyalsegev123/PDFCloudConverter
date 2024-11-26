@@ -2,11 +2,10 @@ package local.assignment;
 
 import software.amazon.awssdk.services.ec2.model.Instance;
 import software.amazon.awssdk.services.ec2.model.InstanceStateName;
+import software.amazon.awssdk.services.ec2.model.InstanceType;
 import software.amazon.awssdk.services.ec2.model.RunInstancesResponse;
-import software.amazon.awssdk.services.ec2.model.StartInstancesRequest;
 import software.amazon.awssdk.services.sqs.model.Message;
-import software.amazon.awssdk.services.ec2.model.Tag;
-import software.amazon.awssdk.services.ec2.model.CreateTagsRequest;
+
 
 import java.io.BufferedReader;
 import java.io.File;
@@ -18,8 +17,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Random;
 import java.util.concurrent.TimeUnit;
-
-
+import java.util.stream.Collectors;
 
 
 
@@ -41,59 +39,42 @@ public class LocalApp {
         return inputFile;
     }
 
-
     private String checkAndRunManager() {
-        List<Instance> managerInstances = aws.getAllInstancesWithLabel(AWS.Label.Manager);
+        List<Instance> managerInstances = aws.getAllInstancesWithLabel(AWS.Label.Manager).stream()
+                                            .filter(instance -> !instance.state().name().equals(InstanceStateName.TERMINATED))
+                                            .collect(Collectors.toList());
         System.out.println("Checking for active Manager node...");  
-        if (managerInstances.size() > 0) {
+        
+        if (!managerInstances.isEmpty()) {
             Instance manager = managerInstances.get(0);
-            if(manager.state().name().equals(InstanceStateName.RUNNING)) {
+            if (InstanceStateName.RUNNING.equals(manager.state().name()))  //RUNNING
                 System.out.println("Active Manager node found: " + manager.instanceId());
-            }
-            else { //manager instance is not RUNNING
-                StartInstancesRequest startRequest = StartInstancesRequest.builder()
-                    .instanceIds(manager.instanceId())
-                    .build();
-
-                // Start the instance
-                aws.ec2.startInstances(startRequest);
-                System.out.println("Active Manager node found and activated: " + managerInstances.get(0).instanceId());
-            }
-            return managerInstances.get(0).instanceId();
+            else  //STOPPED
+                aws.startInstance(manager.instanceId());
+            return manager.instanceId();
         } 
-        else { //list size == 0
-            // Define the user data script as a String
-            
-            System.out.println("No active Manager node found. Launching a new one...");
-            String userDataScript = ""; //Figure out the script 
-            RunInstancesResponse response = aws.runInstanceFromAmiWithScript(
-                        aws.IMAGE_AMI,            // AMI ID
-                        software.amazon.awssdk.services.ec2.model.InstanceType.T2_NANO, // Instance type
-                        1,                        // Minimum count
-                        1,                        // Maximum count
-                        userDataScript            // User data script
-            );
-            
-            String newInstanceId = response.instances().get(0).instanceId();
-
-            // Add the "Manager" label (tag) to the new instance
-            Tag managerTag = Tag.builder()
-                .key("Label")
-                .value("Manager")
-                .build();
-            
-            // Create a tag request
-            CreateTagsRequest createTagsRequest = CreateTagsRequest.builder()
-                .resources(newInstanceId)  // The instance ID to tag
-                .tags(managerTag)          // The tag to add
-                .build();
-
-            // Apply the tag to the newly launched instance
-            aws.ec2.createTags(createTagsRequest);
-            return newInstanceId;
-        } 
+        //DOESN'T EXIST
+        else 
+            return launchNewManager();
+        
     }
+    
+    private String launchNewManager() {
+        System.out.println("No active Manager node found. Launching a new one...");
+        String userDataScript = "";  // Validate or define your script here
 
+        RunInstancesResponse response = aws.runInstanceFromAmiWithScript(
+                aws.IMAGE_AMI,
+                InstanceType.T2_NANO,
+                1,
+                1,
+                userDataScript
+        );
+
+        String newInstanceId = response.instances().get(0).instanceId();
+        aws.tagInstanceAsManager(newInstanceId);
+        return newInstanceId;
+    }
 
     public void uploadToS3(String inputFileName, File inputFile){
         if(!aws.checkIfBucketExists(aws.bucketName)){
@@ -107,12 +88,11 @@ public class LocalApp {
         }
     }
 
-
     private String waitForSQSMessage() {
         try {
             while (true) {
                 // Poll for a message from the SQS queue
-                List<Message> messages = aws.getSQSMessagesList(manager2LocalUrl);
+                List<Message> messages = aws.getSQSMessagesList(manager2LocalUrl , 10 , 20);
                 if (!messages.isEmpty()) {
                     Message message = messages.get(0);
                     String resultFileKey = message.body();
@@ -131,7 +111,6 @@ public class LocalApp {
             return null;            
         }
     }
-
 
     private void mergeFilesToOutput(String summaryFileName, String inputFileName, String HtmlFileName){
         try {
@@ -174,7 +153,6 @@ public class LocalApp {
         return inputData;
     }
 
-    
     private List<String> readS3File(String s3FileName) throws IOException {
         List<String> s3Data = new ArrayList<>();
         try (BufferedReader reader = new BufferedReader(new FileReader(s3FileName))) {
@@ -185,7 +163,6 @@ public class LocalApp {
         }
         return s3Data;
     }
-
 
     private void generateHtmlFile(List<String[]> inputData, List<String> s3Data, String outputHtmlFileName) throws IOException {
         try (PrintWriter writer = new PrintWriter(new FileWriter(outputHtmlFileName))) {
@@ -215,7 +192,6 @@ public class LocalApp {
             writer.println("</html>");
         }
     }
-
 
     public static String generateUniqueID() {
         Random random = new Random();
@@ -265,7 +241,7 @@ public class LocalApp {
         app.uploadToS3(inputFileName , inputFile);
                 
         //Step 4: Sending a message to SQS queue, stating the location of the file on S3
-        app.aws.sendSQSMessage("s3:/" + app.aws.bucketName + "/LocalApp"  + app.localAppID + "/inputFiles/" + inputFileName, app.local2ManagerUrl);
+        app.aws.sendSQSMessage("s3:/" + app.aws.bucketName + "/LocalApp"  + app.localAppID + "/inputFiles/" + inputFileName + "\t" + terminateMode + "\t" + workerFileRatio , app.local2ManagerUrl);
         
         //Step 5: wait for the Manager to finish and when he does, takes the location of output file in S3
         String OutputLocationInS3 = app.waitForSQSMessage(); // manager needs to keep the path format with the counter of the local app
