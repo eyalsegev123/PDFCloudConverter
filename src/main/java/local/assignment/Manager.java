@@ -3,16 +3,14 @@ import java.io.BufferedReader;
 import java.io.File;
 import java.io.FileReader;
 import java.io.IOException;
+import java.util.HashMap;
 import java.util.List;
-import java.util.concurrent.BlockingQueue;
-import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
-import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.ThreadPoolExecutor;
 
 import software.amazon.awssdk.services.ec2.model.InstanceType;
-import software.amazon.awssdk.services.sqs.SqsClient;
 import software.amazon.awssdk.services.sqs.model.Message;
+
 
 
 public class Manager {
@@ -20,13 +18,15 @@ public class Manager {
     protected int activeWorkers = 0;
     protected Object lockActiveWorkers = new Object();
     protected final String localAppsQueueUrl = aws.getQueueUrl("local2Manager");
-    protected final String manager2WorkersQueueUrl = aws.getQueueUrl("manager2WorkersQueue");
-    protected final String workers2ManagerQueueUrl = aws.getQueueUrl("workers2ManagerQueue");
+    protected final String manager2WorkersQueueUrl = aws.createQueue("manager2WorkersQueue");
+    protected final String workers2ManagerQueueUrl = aws.createQueue("workers2ManagerQueue");
     protected ThreadPoolExecutor threadPool;
     protected boolean needsToTerminate = false;
     protected int NUMBER_OF_THREADS = 10;
     protected String ami = "" ; 
     protected String script ="";
+    protected HashMap<String , Integer> locationToCountTarget = new HashMap<>(); // locations in s3 :: number of files we need to edit
+    protected HashMap<String , Integer> locationToCurrentCounter = new HashMap<>(); // locations in s3 :: number of files we already edited
     //*** */
     // figure out the ami and script
     // *** 
@@ -39,14 +39,17 @@ public class Manager {
 
         if (!messages.isEmpty()) {
             Message message = messages.get(0);
-            String[] body = message.body().split("\t");  // path    terminate_mode      ratio
+            String[] body = message.body().split("\t");  // path    terminate_mode     ratio   countLines
             
             needsToTerminate = body[1].equals("true") ? true : false;
             int workFileRatio = Integer.parseInt(body[2]);
+            
             if(needsToTerminate)
                 System.out.println("Termination message received.");
-
-            String locationInS3 = body[0];
+            int countLines = Integer.parseInt(body[3]);
+            String locationInS3 = body[0].replace("/inputFiles/", "/outputFiles/");
+            locationToCountTarget.put(locationInS3, countLines);
+            locationToCurrentCounter.put(locationInS3, 0);
             
         	// Process S3 file URLs when a new task is received
             threadPool.submit(() -> processAndDivideS3File(locationInS3, workFileRatio));
@@ -97,11 +100,27 @@ public class Manager {
         }
     }
 
-    protected void mergeToSummaryAndUpload() {
-        //TO DO
+    protected void checkWorkersQueue() {
+        //The worker sends location of the URL in s3 and how many urls he 
+        List<Message> messages = aws.getSQSMessagesList(workers2ManagerQueueUrl , 1 , 0);
+
+        if (!messages.isEmpty()) {
+            Message message = messages.get(0);
+            String[] body = message.body().split("\t");  // location_in_s3     how _much_files_edited   
+            String locationInS3 = body[0];
+            int fileEdited = Integer.parseInt(body[1]);
+            int lastCounter = locationToCurrentCounter.get(locationInS3); // the current amount of files already edited
+            int updatedCounter = lastCounter + fileEdited;
+            locationToCountTarget.put(locationInS3 , updatedCounter);
+            if(updatedCounter == locationToCountTarget.get(locationInS3));
+               // submit --> mergeToSummaryAndUpload();
+        }
     }
 
+    protected void mergeToSummaryAndUpload() {
+    
 
+    }
 
 
 
@@ -111,7 +130,8 @@ public class Manager {
         manager.threadPool = (ThreadPoolExecutor) Executors.newFixedThreadPool(10);
         System.out.println("Thread pool initialized with: " + manager.NUMBER_OF_THREADS);
         while (true){
-        	manager.listenForTasks();           
+        	manager.listenForTasks();
+            manager.checkWorkersQueue();           
         }
      
     }

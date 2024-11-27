@@ -340,7 +340,7 @@ public class AWS {
             .build();
 
         sqs.sendMessage(request);
-        System.out.println("Message sent to queue: " + SQSUrl + "/nMessage Sent: " + messageBody);
+        System.out.println("Message sent to queue: " + SQSUrl + "/nMessage Sent: " + messageBody + "/t" + countLines);
     }
 
     public List<Message> getSQSMessagesList(String queueUrl, Integer maxNumberOfMessages, Integer waitTimeSeconds) {

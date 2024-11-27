@@ -27,16 +27,31 @@ public class LocalApp {
     protected String localAppID = generateUniqueID();
     protected String local2ManagerUrl = aws.createQueue("local2Manager");
     protected String manager2LocalUrl = aws.createQueue("manager2Local" + localAppID);
+    protected int countLinesInFile = 0;
     
     private File getAndCheckInputFile(String inputFileName) {
         File inputFile = new File(inputFileName);
-
         //Checking that the file is Valid
         if (!inputFile.exists() || !inputFile.isFile() || !inputFile.canRead()) {
             System.out.println("File is not valid");
             return null;
         }
+        this.countLinesInFile = countLinesInputFile(inputFile);
         return inputFile;
+    }
+
+    private int countLinesInputFile(File inputFile) {
+        try (PDDocument document = PDDocument.load(inputFile)) {
+            // Extract text from PDF
+            PDFTextStripper textStripper = new PDFTextStripper();
+            String text = textStripper.getText(document);
+
+            // Count lines by splitting on newlines
+            int lineCount = text.split("\\r?\\n").length;
+            return lineCount;
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
     }
 
     private String checkAndRunManager() {
@@ -241,10 +256,10 @@ public class LocalApp {
         app.uploadToS3(inputFileName , inputFile);
                 
         //Step 4: Sending a message to SQS queue, stating the location of the file on S3
-        app.aws.sendSQSMessage("s3:/" + app.aws.bucketName + "/LocalApp"  + app.localAppID + "/inputFiles/" + inputFileName + "\t" + terminateMode + "\t" + workerFileRatio , app.local2ManagerUrl);
+        app.aws.sendSQSMessage("s3:/" + app.aws.bucketName + "/LocalApp"  + app.localAppID + "/inputFiles/" + inputFileName + "\t" + terminateMode + "\t" + workerFileRatio + "\t" + app.countLinesInFile , app.local2ManagerUrl);
         
         //Step 5: wait for the Manager to finish and when he does, takes the location of output file in S3
-        String OutputLocationInS3 = app.waitForSQSMessage(); // manager needs to keep the path format with the counter of the local app
+        String OutputLocationInS3 = app.waitForSQSMessage(); 
         
         //Step 6: Download the summaryFile from S3 , Assuming the files are coming back in same order as input 
         String summaryFileName = "SummaryFile_localApp" + app.localAppID + ".txt";
@@ -261,7 +276,7 @@ public class LocalApp {
         }
 
         // step 9 : closing local queue
-        app.aws.deleteQueue(app.manager2LocalUrl);
+        app.aws.deleteQueue(app.manager2LocalUrl);  
         
     }
 }
