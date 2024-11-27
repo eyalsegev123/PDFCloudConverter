@@ -293,6 +293,61 @@ public class AWS {
         }
     }
 
+    public List<String> getFilesInFolder(String folderPath) {
+        List<String> fileKeys = new ArrayList<>();
+
+        try {
+            ListObjectsV2Request listReq = ListObjectsV2Request.builder()
+                    .bucket(bucketName)
+                    .prefix(folderPath) // Ensure you fetch only items under the folder
+                    .build();
+
+            ListObjectsV2Response listRes;
+            do {
+                listRes = s3.listObjectsV2(listReq);
+                for (S3Object s3Object : listRes.contents()) 
+                    fileKeys.add(s3Object.key());
+
+                // Prepare the next request in case of pagination
+                listReq = listReq.toBuilder()
+                        .continuationToken(listRes.nextContinuationToken())
+                        .build();
+
+            } while (listRes.isTruncated());
+        } catch (Exception e) {
+            throw new RuntimeException("Failed to list files in folder: " + folderPath, e);
+        }
+        return fileKeys;
+    }
+
+
+    public void deleteAllFilesInFolder(String folderPrefix) {
+        // Ensure folderPrefix ends with "/"
+        if (!folderPrefix.endsWith("/")) {
+            folderPrefix += "/";
+        }
+
+        // List all objects in the specified folder
+        ListObjectsV2Request listRequest = ListObjectsV2Request.builder()
+                .bucket(bucketName)
+                .prefix(folderPrefix)
+                .build();
+
+        ListObjectsV2Response listResponse = s3.listObjectsV2(listRequest);
+
+        // Iterate through each object and delete it
+        for (S3Object s3Object : listResponse.contents()) {
+            String objectKey = s3Object.key();
+            DeleteObjectRequest deleteRequest = DeleteObjectRequest.builder()
+                    .bucket(bucketName)
+                    .key(objectKey)
+                    .build();
+
+            s3.deleteObject(deleteRequest);
+            System.out.println("Deleted: " + objectKey);
+        }
+    }
+
     ////////////////////////////////////////////// SQS
 
     public String createQueue(String queueName) {
@@ -340,7 +395,7 @@ public class AWS {
             .build();
 
         sqs.sendMessage(request);
-        System.out.println("Message sent to queue: " + SQSUrl + "/nMessage Sent: " + messageBody + "/t" + countLines);
+        System.out.println("Message sent to queue: " + SQSUrl + "/nMessage Sent: " + messageBody );
     }
 
     public List<Message> getSQSMessagesList(String queueUrl, Integer maxNumberOfMessages, Integer waitTimeSeconds) {

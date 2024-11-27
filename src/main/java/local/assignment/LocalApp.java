@@ -19,6 +19,9 @@ import java.util.Random;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 
+import org.apache.pdfbox.pdmodel.PDDocument;
+import org.apache.pdfbox.text.PDFTextStripper;
+
 
 
 public class LocalApp {
@@ -51,6 +54,8 @@ public class LocalApp {
             return lineCount;
         } catch (Exception e) {
             e.printStackTrace();
+            System.out.println("couldn't count num of lines from file");
+            return 0;
         }
     }
 
