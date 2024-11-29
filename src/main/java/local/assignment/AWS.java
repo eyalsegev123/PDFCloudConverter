@@ -99,7 +99,7 @@ public class AWS {
         DescribeInstancesRequest describeInstancesRequest = DescribeInstancesRequest.builder()
                 .filters(Filter.builder()
                         .name("tag:Label")
-                        .values(label.toString())
+                        .values(label.name())
                         .build())
                 .build();
 
@@ -280,13 +280,28 @@ public class AWS {
 
     public void tagInstanceAsManager(String instanceId) {
         try {
-            Tag managerTag = Tag.builder().key("Label").value("Manager").build();
+            Tag managerTag = Tag.builder().key("Label").value(Label.Manager.name()).build();
             CreateTagsRequest createTagsRequest = CreateTagsRequest.builder()
                 .resources(instanceId)
                 .tags(managerTag)
                 .build();
             ec2.createTags(createTagsRequest);
             System.out.println("New Manager node tagged: " + instanceId);
+        } catch (Exception e) {
+            System.err.println("Failed to tag instance: " + instanceId);
+            e.printStackTrace();
+        }
+    }
+
+    public void tagInstanceAsWorker(String instanceId) {
+        try {
+            Tag workerTag = Tag.builder().key("Label").value(Label.Worker.name()).build();
+            CreateTagsRequest createTagsRequest = CreateTagsRequest.builder()
+                .resources(instanceId)
+                .tags(workerTag)
+                .build();
+            ec2.createTags(createTagsRequest);
+            System.out.println("New Worker node tagged: " + instanceId);
         } catch (Exception e) {
             System.err.println("Failed to tag instance: " + instanceId);
             e.printStackTrace();

@@ -10,8 +10,12 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ThreadPoolExecutor;
+import java.util.concurrent.TimeUnit;
 
+import software.amazon.awssdk.services.ec2.model.Instance;
+import software.amazon.awssdk.services.ec2.model.InstanceStateName;
 import software.amazon.awssdk.services.ec2.model.InstanceType;
+import software.amazon.awssdk.services.ec2.model.RunInstancesResponse;
 import software.amazon.awssdk.services.sqs.model.Message;
 
 
@@ -30,6 +34,7 @@ public class Manager {
     protected String script ="";
     protected HashMap<String , Integer> locationToCountTarget = new HashMap<>(); // locations in s3 :: number of files we need to edit
     protected HashMap<String , Integer> locationToCurrentCounter = new HashMap<>(); // locations in s3 :: number of files we already edited
+    protected int totalLocalApps = 0;
     //*** */
     // figure out the ami and script
     // *** 
@@ -38,41 +43,46 @@ public class Manager {
         // Listen for tasks in the SQS queue
     protected void listenForTasksLocal() {
         while (true) {
-            List<Message> messages = aws.getSQSMessagesList(localAppsQueueUrl , 1 , 0);
+            List<Message> messages = aws.getSQSMessagesList(localAppsQueueUrl , 1 , 10);
             if (!messages.isEmpty()) {
                 Message message = messages.get(0);
-                String[] body = message.body().split("\t");  // path    terminate_mode     ratio   countLines
+                String[] body = message.body().split("\t");  // PathToInputFileInS3   terminate_mode     ratio   countLines
                 
                 needsToTerminate = body[1].equals("true") ? true : false;
                 int workFileRatio = Integer.parseInt(body[2]);
-                
-                if(needsToTerminate)
-                    System.out.println("Termination message received.");
                 int countLines = Integer.parseInt(body[3]);
-                
-                // s3:/localapp123/inputFiles/haguvi.txt ----> s3:/localapp123/outputFiles/haguvi.txt_56
-                String locationInS3 = body[0].replace("/inputFiles/", "/outputFiles/");
-                locationToCountTarget.put(locationInS3, countLines);
-                locationToCurrentCounter.put(locationInS3, 0);
+            
+                // s3:/localapp123/inputFiles/haguvi.txt ----> s3:/localapp123/outputFiles/haguvi.txt
+                String targetLocationInS3 = body[0].replace("/inputFiles/", "/outputFiles/");
+                locationToCountTarget.put(targetLocationInS3, countLines);
+                locationToCurrentCounter.put(targetLocationInS3, 0);
                 
                 // Process S3 file URLs when a new task is received
-                threadPool.submit(() -> processAndDivideS3File(locationInS3, workFileRatio));
+                threadPool.submit(() -> processAndDivideS3File(targetLocationInS3, workFileRatio));
                 // Delete message from queue after processing
-                aws.deleteMessage(localAppsQueueUrl, message.receiptHandle());
-            }
-        } 
+                aws.deleteMessage(localAppsQueueUrl, message.receiptHandle()); 
+                if(needsToTerminate){ 
+                    //Retreives the number of total localApps that were sent until terminate message
+                    totalLocalApps = locationToCountTarget.size();  
+                    System.out.println("Submitted last file & Termination message received.");
+                    break;
+                }
+            }    
+        }
+        System.out.println("listener of LocalApps finished his job");   
     }
 
-	protected void processAndDivideS3File(String locationInS3File, int workerFileRatio){
-        String[] splitLocation = locationInS3File.split("/");
+	protected void processAndDivideS3File(String targetLocationInS3, int workerFileRatio){
+        String[] splitLocation = targetLocationInS3.split("/");
 		File s3InputFile = new File(splitLocation[2] + "_" + splitLocation[4]); // localAPP+id _ fileName
-		aws.downloadFileFromS3(locationInS3File, s3InputFile);
+		aws.downloadFileFromS3(targetLocationInS3, s3InputFile);
 		int numOfPdfUrls = 0;
 
 		try (BufferedReader reader = new BufferedReader(new FileReader(s3InputFile))) {
 			String line;
             while ((line = reader.readLine()) != null) {
-				aws.sendSQSMessage(line + "_" + numOfPdfUrls + "_" + locationInS3File ,manager2WorkersQueueUrl); // op+url_index_location
+                // operation   originalUrl     index     location (seperated by tabs)
+				aws.sendSQSMessage(line + "\t" + numOfPdfUrls + "\t" + targetLocationInS3 ,manager2WorkersQueueUrl); 
                 numOfPdfUrls++;
 			}
 		} catch (IOException e) {
@@ -96,31 +106,57 @@ public class Manager {
             activeWorkers += numWorkersToAdd;
         }
         for (int i = 0; i < numWorkersToAdd; i++) {
-            aws.runInstanceFromAmiWithScript(ami , InstanceType.T2_NANO , 1 , 1 , script);
+            RunInstancesResponse response = aws.runInstanceFromAmiWithScript(ami , InstanceType.T2_NANO , 1 , 1 , script);
+            String newInstanceId = response.instances().get(0).instanceId();
+            aws.tagInstanceAsWorker(newInstanceId);
+        }
+    }
+
+    protected void terminateThreadPool(){
+        threadPool.shutdown();  // Initiates an orderly shutdown
+        System.out.println("Started shutdown of ThreadPool");
+        try {
+            
+            if (!threadPool.awaitTermination(60, TimeUnit.SECONDS)) {
+                threadPool.shutdownNow();  // Force shutdown if tasks take too long
+            }
+        } 
+        catch (InterruptedException e) {
+            threadPool.shutdownNow();  // Handle interruption
+            Thread.currentThread().interrupt();
         }
     }
 
     protected void listenForWorkersTasks() {
+        int numberOfAppsSubmitted = 0;
         while (true) {
             //The worker sends location of the URL in s3 and how many urls he 
             List<Message> messages = aws.getSQSMessagesList(workers2ManagerQueueUrl , 5 , 2);
             while (!messages.isEmpty()) {
                 Message message = messages.get(0);
                 messages.remove(0);
-                String[] body = message.body().split("\t");  // originalFileUrl   newFilePathInS3(_index in the name)  operation  
-                String locationInS3 = body[1];
+                String locationInS3 = message.body();  //newFilePathInS3(_index in the name)  
                 int lastCounter = locationToCurrentCounter.get(locationInS3); // the current amount of files already edited
                 int updatedCounter = lastCounter++;
                 locationToCountTarget.put(locationInS3 , lastCounter++);
                 if(updatedCounter == locationToCountTarget.get(locationInS3)) {
-                    int lastSlashIndex = locationInS3.lastIndexOf('/');
+                    
                     // Extract the substring up to the last '/'
+                    int lastSlashIndex = locationInS3.lastIndexOf('/');
                     String outputFolderPath = locationInS3.substring(0, lastSlashIndex + 1);
                     threadPool.submit(() -> mergeToSummaryAndUploadToS3(outputFolderPath));
+                    numberOfAppsSubmitted++;                    
                 }
-                aws.deleteMessage(workers2ManagerQueueUrl, message.receiptHandle());
+                aws.deleteMessage(workers2ManagerQueueUrl, message.receiptHandle());       
             }
-        } 
+            if(numberOfAppsSubmitted == totalLocalApps) {
+                // All files have been submitted to merge task --> meaning no new missions to submit
+                terminateThreadPool();
+                System.out.println("Thread Pool terminated");
+                break;
+            }
+        }
+        System.out.println("listener for Workers finished his job");
     }
 
     protected void mergeToSummaryAndUploadToS3(String outputFolderPath) {
@@ -169,16 +205,49 @@ public class Manager {
         }
     }
 
+    public void deActivateEC2Nodes() {
+        List<Instance> workers = aws.getAllInstancesWithLabel(AWS.Label.Worker);
+        for(Instance workerInstance : workers) {
+            if(workerInstance.state().name() == InstanceStateName.RUNNING) {
+                aws.terminateInstance(workerInstance.instanceId());
+                // terminate running workers
+            }
+        }
+        System.out.println("Terminated all Workers");
+        List<Instance> managers = aws.getAllInstancesWithLabel(AWS.Label.Manager);
+        for(Instance managerInstance : managers) {
+            if(managerInstance.state().name() == InstanceStateName.RUNNING) {
+                aws.terminateInstance(managerInstance.instanceId());
+                // terminate running manager
+            }
+        }
+        System.out.println("Terminated Manager");
+    }
+
 
 
     public static void main(String[] args) {
         Manager manager = new Manager();
         manager.threadPool = (ThreadPoolExecutor) Executors.newFixedThreadPool(manager.NUMBER_OF_THREADS);
         System.out.println("Thread pool initialized with: " + manager.NUMBER_OF_THREADS);
+        
         Thread localListener = new Thread(() -> manager.listenForTasksLocal());
         Thread workersListener = new Thread(() -> manager.listenForWorkersTasks());
+        
         localListener.start();
         workersListener.start();
+    
+        System.out.println("Main Thread: All threads have started, waiting...");
+        
+        try {
+            localListener.join();
+            workersListener.join();
+        } catch (InterruptedException e) {
+            System.err.println("Main Thread: Interrupted while waiting for threads to complete.");
+            Thread.currentThread().interrupt(); // Preserve interrupt status
+        }
+        System.out.println("Main Thread: All threads have completed execution. Shutting down EC2 instances.");
+        manager.deActivateEC2Nodes();
     }
 }
 
