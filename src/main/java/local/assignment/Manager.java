@@ -192,6 +192,7 @@ public class Manager {
                 // Read the next line from the input file
                 inputLine = inputReader.readLine();
                 
+                
                 // If there's no more lines in input file, break the loop
                 if (inputLine == null) {
                     break;

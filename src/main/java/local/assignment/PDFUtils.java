@@ -15,8 +15,9 @@ import java.net.URL;
 public class PDFUtils {
 
     // Converts the first page of the PDF to an image (PNG format) and returns the file
-    public static File ToImage(String pdfUrl, String outputFilePath) {
-        if(isValidUrl(pdfUrl)){
+    public static Exception ToImage(String pdfUrl, File outputFile) {
+        Exception exc = isValidUrl(pdfUrl);
+        if(exc == null){
             try {
                 // Load the PDF document from the URL
                 PDDocument document = PDDocument.load(new URL(pdfUrl).openStream());
@@ -28,27 +29,27 @@ public class PDFUtils {
                 BufferedImage image = renderer.renderImageWithDPI(0, 300);
 
                 // Save the image as a PNG file
-                File outputFile = new File(outputFilePath);
                 ImageIO.write(image, "PNG", outputFile);
 
                 // Close the document to free resources
                 document.close();
 
-                System.out.println("First page successfully converted to: " + outputFilePath);
-                return outputFile;
+                System.out.println("First page successfully converted to: " + outputFile);
+                return null;
             } catch (IOException e) {
                 System.out.println("Failed to convert PDF to image: " + e.getMessage());
-                e.printStackTrace();
-                return null;
+                return e;
             }
         }
-        return null;
+        else
+            return exc;
         
     }
 
     // Converts the first page of the PDF to an HTML file and returns the file
-    public static File ToHTML(String pdfUrl, String outputFilePath) {
-        if(isValidUrl(pdfUrl)){
+    public static Exception ToHTML(String pdfUrl, File outputFile) {
+        Exception exc = isValidUrl(pdfUrl);
+        if(exc == null){
             try {
                 // Load the PDF document from the URL
                 PDDocument document = PDDocument.load(new URL(pdfUrl).openStream());
@@ -63,7 +64,6 @@ public class PDFUtils {
                 String htmlContent = "<html><body><pre>" + pageText + "</pre></body></html>";
 
                 // Save the HTML content to a file
-                File outputFile = new File(outputFilePath);
                 FileWriter writer = new FileWriter(outputFile);
                 writer.write(htmlContent);
                 writer.close();
@@ -71,20 +71,21 @@ public class PDFUtils {
                 // Close the document to free resources
                 document.close();
 
-                System.out.println("First page successfully converted to HTML: " + outputFilePath);
-                return outputFile;
+                System.out.println("First page successfully converted to HTML: " + outputFile);
+                return null;
             } catch (IOException e) {
                 System.out.println("Failed to convert PDF to HTML: " + e.getMessage());
-                e.printStackTrace();
-                return null;
+                return e;
             }
         }
-        return null;
+        else
+            return exc;
     }
 
     // Converts the first page of the PDF to a text file and returns the file
-    public static File ToText(String pdfUrl, String outputFilePath) {
-        if(isValidUrl(pdfUrl)){
+    public static Exception ToText(String pdfUrl, File outputFile) {
+        Exception exc = isValidUrl(pdfUrl);
+        if(exc == null){
             try {
                 // Load the PDF document from the URL
                 PDDocument document = PDDocument.load(new URL(pdfUrl).openStream());
@@ -96,7 +97,6 @@ public class PDFUtils {
                 String pageText = stripper.getText(document);
 
                 // Save the text to a file
-                File outputFile = new File(outputFilePath);
                 FileWriter writer = new FileWriter(outputFile);
                 writer.write(pageText);
                 writer.close();
@@ -104,27 +104,30 @@ public class PDFUtils {
                 // Close the document to free resources
                 document.close();
 
-                System.out.println("First page successfully converted to text: " + outputFilePath);
-                return outputFile;
+                System.out.println("First page successfully converted to text: " + outputFile);
+                return null;
             } catch (IOException e) {
                 System.out.println("Failed to convert PDF to text: " + e.getMessage());
-                e.printStackTrace();
-                return null;
+                return e;
             }
         }
-        return null;
+        else
+            return exc;
     }
 
-    public static boolean isValidUrl(String urlString) {
+    public static Exception isValidUrl(String urlString) {
         try {
             URL url = new URL(urlString);
             HttpURLConnection connection = (HttpURLConnection) url.openConnection();
             connection.setRequestMethod("HEAD");
             int responseCode = connection.getResponseCode();
-            return (responseCode == HttpURLConnection.HTTP_OK);
+            if(responseCode == HttpURLConnection.HTTP_OK)
+                return null;
+            else 
+                return new Exception("URL returned response code: " + responseCode);
         } catch (Exception e) {
             System.out.println("Invalid URL: " + urlString);
-            return false;
+            return e;
         }
     }
 }

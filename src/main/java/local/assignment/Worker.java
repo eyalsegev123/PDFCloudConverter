@@ -1,11 +1,8 @@
 package local.assignment;
 
-import java.io.BufferedInputStream;
 import java.io.File;
-import java.io.FileOutputStream;
-import java.io.InputStream;
-import java.net.HttpURLConnection;
-import java.net.URL;
+import java.io.FileWriter;
+import java.io.IOException;
 import java.util.List;
 
 import software.amazon.awssdk.services.sqs.model.Message;
@@ -32,21 +29,25 @@ public class Worker {
                 String fileNameToUploadWithIndex = splitMessage[3];
 
                 File fileAfterOperation;
+                Exception exc = null;
 
                 switch (operation) {
                     case "ToHTML":
                         fileNameToUploadWithIndex += ".html";
-                        fileAfterOperation = PDFUtils.ToHTML(originalUrl, fileNameToUploadWithIndex);
+                        fileAfterOperation = new File(fileNameToUploadWithIndex);
+                        exc = PDFUtils.ToHTML(originalUrl, fileAfterOperation);
                         break;
 
                     case "ToImage":
                         fileNameToUploadWithIndex += ".png";
-                        fileAfterOperation = PDFUtils.ToImage(targetlLocationInS3, fileNameToUploadWithIndex);
+                        fileAfterOperation = new File(fileNameToUploadWithIndex);
+                        exc = PDFUtils.ToImage(targetlLocationInS3, fileAfterOperation);
                         break;
 
                     case "ToText":
                         fileNameToUploadWithIndex += ".txt";
-                        fileAfterOperation = PDFUtils.ToText(targetlLocationInS3, fileNameToUploadWithIndex);
+                        fileAfterOperation = new File(fileNameToUploadWithIndex);
+                        exc = PDFUtils.ToText(targetlLocationInS3, fileAfterOperation);
                         break;
                     
                     default:
@@ -55,16 +56,40 @@ public class Worker {
                         break;
                 }
                 
-                //upload each subFFile to S3 with appropiate index and extension
+                // if(fileAfterOperation == null){
+                //     worker.aws.sendSQSMessage("Error when performing operation on PDF", worker.workers2ManagerQueueUrl);
+                //     fileAfterOperation = new File(fileNameToUploadWithIndex + "_Error.txt");
+                // }
+
+                if (exc != null) { //Error
+                    
+                    //Delete the file opened and 
+                    fileAfterOperation.delete();
+                    int dotIndex = fileNameToUploadWithIndex.lastIndexOf(".");
+                    fileNameToUploadWithIndex = fileNameToUploadWithIndex.substring(0, dotIndex)  + "_Error.txt";
+
+                    // Generate an error file with the same index but a distinct marker
+                    fileAfterOperation = new File(fileNameToUploadWithIndex);
+                        
+                    try (FileWriter writer = new FileWriter(fileAfterOperation)) {
+                        writer.write("Error processing file: " + originalUrl + "\n");
+                        writer.write("Operation: " + operation + "\n");
+                        writer.write("Error Message: " + exc.getMessage()); // Add more details if available
+                    } catch (IOException e) {
+                        System.out.println("Failed to create error file: " + e.getMessage());
+                        return; // Stop processing if the error file can't be created
+                    }
+                }
+
+                //upload each subFFile to S3 with appropiate index and extension (Also taking care of Errors)
                 try {
                     worker.aws.uploadFileToS3(targetlLocationInS3, fileAfterOperation);
+                    //Send SQS message to the manager
+                    worker.aws.sendSQSMessage(targetlLocationInS3 + "/" + fileNameToUploadWithIndex , worker.workers2ManagerQueueUrl);
                 }
                 catch(Exception e) {
                     System.out.println("Exception occured: couldn't upload file to S3");
-                }
-                
-                //Send SQS message to the manager
-                worker.aws.sendSQSMessage(targetlLocationInS3 + "/" + fileNameToUploadWithIndex , worker.workers2ManagerQueueUrl);
+                }    
             }
         } 
 
