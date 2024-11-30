@@ -134,7 +134,7 @@ public class AWS {
                 .build();
 
         s3.putObject(request, file.toPath());
-        return "s3://" + bucketName + "/" + keyPath;
+        return "s3:/" + bucketName + "/" + keyPath;
     }
 
     public void downloadFileFromS3(String keyPath, File outputFile) {
