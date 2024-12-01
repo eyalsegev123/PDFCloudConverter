@@ -28,8 +28,8 @@ public class LocalApp {
     
     protected AWS aws = AWS.getInstance();
     protected String localAppID = generateUniqueID();
-    protected String local2ManagerUrl = aws.createQueue("local2Manager");
-    protected String manager2LocalUrl = aws.createQueue("manager2Local" + localAppID);
+    protected String local2ManagerUrl = aws.createQueue("local2Manager"); //Shared queue to send messages to the manager 
+    protected String manager2LocalUrl = aws.createQueue("manager2Local" + localAppID); //Queue for receiving the summary File location in s3 
     protected int countLinesInFile = 0;
     
     private File getAndCheckInputFile(String inputFileName) {
@@ -59,7 +59,7 @@ public class LocalApp {
         }
     }
 
-    private String checkAndRunManager() {
+    private void checkAndRunManager() {
         List<Instance> managerInstances = aws.getAllInstancesWithLabel(AWS.Label.Manager).stream()
                                             .filter(instance -> !instance.state().name().equals(InstanceStateName.TERMINATED))
                                             .collect(Collectors.toList());
@@ -69,17 +69,18 @@ public class LocalApp {
             Instance manager = managerInstances.get(0);
             if (InstanceStateName.RUNNING.equals(manager.state().name()))  //RUNNING
                 System.out.println("Active Manager node found: " + manager.instanceId());
-            else  //STOPPED
+            else if(InstanceStateName.STOPPED.equals(manager.state().name())) //STOPPED
                 aws.startInstance(manager.instanceId());
-            return manager.instanceId();
+            else //TERMINATED
+                launchNewManager();
         } 
         //DOESN'T EXIST
         else 
-            return launchNewManager();
+            launchNewManager();
         
     }
     
-    private String launchNewManager() {
+    private void launchNewManager() {
         System.out.println("No active Manager node found. Launching a new one...");
         String userDataScript = "";  // Validate or define your script here
 
@@ -93,10 +94,10 @@ public class LocalApp {
 
         String newInstanceId = response.instances().get(0).instanceId();
         aws.tagInstanceAsManager(newInstanceId);
-        return newInstanceId;
     }
 
-    public void uploadToS3(String inputFileName, File inputFile){
+    //
+    public void checkBucketAndUploadToS3(String inputFileName, File inputFile){
         if(!aws.checkIfBucketExists(aws.bucketName)){
             aws.createBucket(aws.bucketName);
             System.out.println("You have opened a new bucket: " + aws.bucketName);    
@@ -115,11 +116,11 @@ public class LocalApp {
                 List<Message> messages = aws.getSQSMessagesList(manager2LocalUrl , 10 , 20);
                 if (!messages.isEmpty()) {
                     Message message = messages.get(0);
-                    String resultFileKey = message.body();
+                    String summaryFileLocationS3 = message.body();
                     // Remove the processed message from the queue
                     aws.deleteMessage(manager2LocalUrl, message.receiptHandle());
-                    System.out.println("Received processed file location: " + resultFileKey);
-                    return resultFileKey;
+                    System.out.println("Received processed file location: " + summaryFileLocationS3);
+                    return summaryFileLocationS3;
                 }
                 else 
                     System.out.println("No message received, waiting...");
@@ -132,60 +133,13 @@ public class LocalApp {
         }
     }
 
-    private void mergeFilesToOutput(String summaryFileName, String inputFileName, String HtmlFileName){
-        try {
-            // Read the input file (operation and former URL)
-            List<String[]> inputData = readInputFile(inputFileName);
+    
 
-            // Read the S3 summary file (new URLs)
-            List<String> s3Data = readS3File(summaryFileName);
-
-            if (inputData.size() != s3Data.size()) {
-                System.err.println("Mismatch between input file lines and S3 file lines.");
-                return;
-            }
-
-            // Generate HTML content
-            generateHtmlFile(inputData, s3Data, HtmlFileName);
-
-            System.out.println("HTML file generated successfully: " + HtmlFileName);
-
-        }
-    catch (IOException e) {
-            System.err.println("Error processing files while merging: " + e.getMessage());
-    }
-}
-
-    //return list of operation and the corresponding url
-    private List<String[]> readInputFile(String inputFileName) throws IOException {
-        List<String[]> inputData = new ArrayList<>();
-        try (BufferedReader reader = new BufferedReader(new FileReader(inputFileName))) {
-            String line;
-            while ((line = reader.readLine()) != null) {
-                String[] parts = line.split("\\s+");
-                if (parts.length == 2) {
-                    inputData.add(parts); // [operation, formerUrl]
-                } else {
-                    System.err.println("Invalid input line: " + line);
-                }
-            }
-        }
-        return inputData;
-    }
-
-    private List<String> readS3File(String s3FileName) throws IOException {
-        List<String> s3Data = new ArrayList<>();
-        try (BufferedReader reader = new BufferedReader(new FileReader(s3FileName))) {
-            String line;
-            while ((line = reader.readLine()) != null) {
-                s3Data.add(line.trim()); // Add new URL
-            }
-        }
-        return s3Data;
-    }
-
-    private void generateHtmlFile(List<String[]> inputData, List<String> s3Data, String outputHtmlFileName) throws IOException {
-        try (PrintWriter writer = new PrintWriter(new FileWriter(outputHtmlFileName))) {
+    // Generate an HTML file from summary data
+    private void generateHtmlFileFromSummary(String summaryFileName, String outputHtmlFileName) {
+        try (BufferedReader reader = new BufferedReader(new FileReader(summaryFileName));
+            PrintWriter writer = new PrintWriter(new FileWriter(outputHtmlFileName))) {
+            
             // Write HTML header
             writer.println("<!DOCTYPE html>");
             writer.println("<html>");
@@ -196,22 +150,35 @@ public class LocalApp {
             writer.println("<h1>URL Conversion Results</h1>");
             writer.println("<ul>");
 
-            // Add each line to the HTML
-            for (int i = 0; i < inputData.size(); i++) {
-                String operation = inputData.get(i)[0];
-                String formerUrl = inputData.get(i)[1];
-                String newUrl = s3Data.get(i);
+            // Read and process each line from the summary file
+            String line;
+            while ((line = reader.readLine()) != null) {
+                // Split by tabs (or any other delimiter, adjust as necessary)
+                String[] parts = line.split("\t");  // Splitting by tab character
+                if (parts.length >= 3) {
+                    String operation = parts[0];    // First element: operation
+                    String formerUrl = parts[1];    // Second element: former URL
+                    String newUrl = parts[2];       // Third element: new URL
 
-                writer.printf("<li>%s: <a href=\"%s\">%s</a> -> <a href=\"%s\">%s</a></li>%n",
-                        operation, formerUrl, formerUrl, newUrl, newUrl);
+                    // Write the HTML list item
+                    writer.printf("<li>%s: <a href=\"%s\">%s</a> -> <a href=\"%s\">%s</a></li>%n",
+                            operation, formerUrl, formerUrl, newUrl, newUrl);
+                } else {
+                    System.err.println("Invalid line format in summary file: " + line);
+                }
             }
 
             // Write HTML footer
             writer.println("</ul>");
             writer.println("</body>");
             writer.println("</html>");
+
+        } catch (IOException e) {
+            System.err.println("Error generating HTML file from summary: " + e.getMessage());
         }
     }
+
+
 
     public static String generateUniqueID() {
         Random random = new Random();
@@ -234,6 +201,7 @@ public class LocalApp {
     
     public static void main(String[] args) {
         
+        //Check that we got inputFileName , OutputFileName and workerFileRatio=(n)
         if(args.length <= 2) {
             System.err.println("More params required");
             return;
@@ -242,7 +210,7 @@ public class LocalApp {
         LocalApp app = new LocalApp();
         // Step 1: Read relevant info from args
         String inputFileName = args[0];
-        String HtmlFileName = args[1];
+        String htmlFileName = args[1];
         int workerFileRatio = Integer.parseInt(args[2]);
         File inputFile = app.getAndCheckInputFile(args[0]);
         boolean terminateMode = false;
@@ -255,11 +223,11 @@ public class LocalApp {
         }
         
         // Step 2: Check if Manager node is active , activates if the manager isn't active
-        String managerId = app.checkAndRunManager();
+        app.checkAndRunManager();
 
-        //Step 3: Upload to S3
-        app.uploadToS3(inputFileName , inputFile);
-                
+        //Step 3: Upload to S3 
+        app.checkBucketAndUploadToS3(inputFileName , inputFile);
+              
         //Step 4: Sending a message to SQS queue, stating the location of the file on S3
         app.aws.sendSQSMessage("s3:/" + app.aws.bucketName + "/LocalApp"  + app.localAppID + "/inputFiles/" + inputFileName + "\t" + terminateMode + "\t" + workerFileRatio + "\t" + app.countLinesInFile , app.local2ManagerUrl);
         
@@ -272,21 +240,14 @@ public class LocalApp {
         app.aws.downloadFileFromS3(OutputLocationInS3, summaryFile);
 
         //Step 7: Create the HTML
-        app.mergeFilesToOutput(summaryFileName, inputFileName, HtmlFileName);
-        
-        // Step 8: checks terminate mode
-        if(terminateMode) {
-            //send a message to sqs indicating the manager needs to terminate 
-            app.aws.sendSQSMessage("terminate", app.local2ManagerUrl);
-        }
-
-        // step 9 : closing local queue
+        app.generateHtmlFileFromSummary(summaryFileName, htmlFileName);
+        System.out.println("HTML file generated successfully: " + htmlFileName);
+        if(summaryFile.exists())
+            summaryFile.delete();
+            
+        // step 8 : closing local queue
         app.aws.deleteQueue(app.manager2LocalUrl);  
         
     }
 }
-
-
-
-
 

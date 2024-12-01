@@ -56,15 +56,14 @@ public class Worker {
                         break;
                 }
                 
-                // if(fileAfterOperation == null){
-                //     worker.aws.sendSQSMessage("Error when performing operation on PDF", worker.workers2ManagerQueueUrl);
-                //     fileAfterOperation = new File(fileNameToUploadWithIndex + "_Error.txt");
-                // }
 
-                if (exc != null) { //Error
+                if (exc != null) { //Error - an exception has occured in the operation process
                     
-                    //Delete the file opened and 
-                    fileAfterOperation.delete();
+                    //Check if files Exists and Delete it 
+                    if (fileAfterOperation.exists() && !fileAfterOperation.delete()) {
+                        //Handling the error if the file deletion fails
+                        System.err.println("Failed to delete file: " + fileAfterOperation.getPath());
+                    }
                     int dotIndex = fileNameToUploadWithIndex.lastIndexOf(".");
                     fileNameToUploadWithIndex = fileNameToUploadWithIndex.substring(0, dotIndex)  + "_Error.txt";
 
@@ -72,8 +71,6 @@ public class Worker {
                     fileAfterOperation = new File(fileNameToUploadWithIndex);
                         
                     try (FileWriter writer = new FileWriter(fileAfterOperation)) {
-                        writer.write("Error processing file: " + originalUrl + "\n");
-                        writer.write("Operation: " + operation + "\n");
                         writer.write("Error Message: " + exc.getMessage()); // Add more details if available
                     } catch (IOException e) {
                         System.out.println("Failed to create error file: " + e.getMessage());
@@ -81,11 +78,13 @@ public class Worker {
                     }
                 }
 
-                //upload each subFFile to S3 with appropiate index and extension (Also taking care of Errors)
+                //Upload each subFile to S3 with appropiate index and extension (Also taking care of Errors)
                 try {
                     worker.aws.uploadFileToS3(targetlLocationInS3, fileAfterOperation);
                     //Send SQS message to the manager
                     worker.aws.sendSQSMessage(targetlLocationInS3 + "/" + fileNameToUploadWithIndex , worker.workers2ManagerQueueUrl);
+                    if(fileAfterOperation.exists())
+                        fileAfterOperation.delete();
                 }
                 catch(Exception e) {
                     System.out.println("Exception occured: couldn't upload file to S3");

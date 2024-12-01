@@ -1,6 +1,7 @@
 package local.assignment;
 
 import software.amazon.awssdk.core.ResponseBytes;
+import software.amazon.awssdk.core.exception.SdkException;
 import software.amazon.awssdk.regions.Region;
 import software.amazon.awssdk.services.ec2.Ec2Client;
 import software.amazon.awssdk.services.ec2.model.*;
@@ -403,15 +404,23 @@ public class AWS {
         return Integer.parseInt(attributes.get(QueueAttributeName.APPROXIMATE_NUMBER_OF_MESSAGES));
     }
 
-    public void sendSQSMessage(String messageBody, String SQSUrl) {
-        SendMessageRequest request = SendMessageRequest.builder()
-            .queueUrl(SQSUrl)
-            .messageBody(messageBody)
-            .build();
+    
 
-        sqs.sendMessage(request);
-        System.out.println("Message sent to queue: " + SQSUrl + "/nMessage Sent: " + messageBody );
+    public void sendSQSMessage(String messageBody, String SQSUrl) {
+        try {
+            SendMessageRequest request = SendMessageRequest.builder()
+                .queueUrl(SQSUrl)
+                .messageBody(messageBody)
+                .build();
+
+            sqs.sendMessage(request);
+            System.out.println("Message sent to queue: " + SQSUrl + "\nMessage Sent: " + messageBody);
+        } catch (SdkException e) {  // Catching AWS SDK exceptions
+            System.err.println("Failed to send message to queue: " + SQSUrl);
+            System.err.println("Error: " + e.getMessage());
+        }
     }
+
 
     public List<Message> getSQSMessagesList(String queueUrl, Integer maxNumberOfMessages, Integer waitTimeSeconds) {
         try {
@@ -453,8 +462,6 @@ public class AWS {
     }
 
     
-
-
 
 
     ///////////////////////

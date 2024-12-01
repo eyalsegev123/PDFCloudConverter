@@ -52,18 +52,18 @@ public class Manager {
                 int workFileRatio = Integer.parseInt(body[2]);
                 int countLines = Integer.parseInt(body[3]);
                 
-                // s3:/localapp123/inputFiles/haguvi.txt ----> s3:/localapp123/outputFiles/input-sample1.txt
+                // s3:/localapp123/inputFiles/input-sample-1.txt ----> s3:/localapp123/outputFiles/input-sample-1.txt
                 String targetLocationInS3 = body[0].replace("/inputFiles/", "/outputFiles/");
                 locationToCountTarget.put(targetLocationInS3, countLines);
                 locationToCurrentCounter.put(targetLocationInS3, 0);
                 
                 // Process S3 file URLs when a new task is received
-                threadPool.submit(() -> processAndDivideS3File(targetLocationInS3, workFileRatio));
+                threadPool.submit(() -> processAndDivideS3File(body[0], workFileRatio));
                 // Delete message from queue after processing
                 aws.deleteMessage(localAppsQueueUrl, message.receiptHandle()); 
-                if(needsToTerminate){ 
+                if(needsToTerminate){
                     //Retreives the number of total localApps that were sent until terminate message
-                    totalLocalApps = locationToCountTarget.size();  
+                    totalLocalApps = locationToCountTarget.size();
                     System.out.println("Submitted last file & Termination message received.");
                     break;
                 }
@@ -72,12 +72,12 @@ public class Manager {
         System.out.println("listener of LocalApps finished his job");   
     }
 
-	protected void processAndDivideS3File(String targetLocationInS3, int workerFileRatio){
+	protected void processAndDivideS3File(String inputFileLocationInS3, int workerFileRatio){
         
-        String[] splitLocation = targetLocationInS3.split("/");
+        String[] splitLocation = inputFileLocationInS3.split("/");
         //Download file from S3 
-		File s3InputFile = new File(splitLocation[2] + "_" + splitLocation[4]); // localAPP+id _ fileName
-		aws.downloadFileFromS3(targetLocationInS3, s3InputFile);
+		File s3InputFile = new File(splitLocation[2] + "_" + splitLocation[4]); // localApp+ID_fileName
+		aws.downloadFileFromS3(inputFileLocationInS3, s3InputFile);
 		int indexOfCurrentPDF = 0;
         
         // Extract the base name
@@ -86,20 +86,23 @@ public class Manager {
         String inputFileNameWithoutExt = inputFileNameWithExt.substring(0, dotIndex) ; //input-sample-1 (without extension)
 
         //Cut the targetLocationInS3 to be without the name of the input-file
-        int lastSlashIndex = inputFileNameWithExt.lastIndexOf("/");
-        targetLocationInS3 = targetLocationInS3.substring(0, lastSlashIndex);
+        int lastSlashIndex = inputFileLocationInS3.lastIndexOf("/");
+        String targetLocationInS3 = inputFileLocationInS3.substring(0, lastSlashIndex+1).replace("/inputFiles/", "/outputFiles/");
         
         //Send a message for each subFile in the input-file
 		try (BufferedReader reader = new BufferedReader(new FileReader(s3InputFile))) {
 			String line;
             while ((line = reader.readLine()) != null) {
                 // line=(operation   originalUrl)   targetLocation     inputFileName_index (seperated by tabs) 
-				aws.sendSQSMessage(line + "\t" + targetLocationInS3 + "\t" + inputFileNameWithoutExt + "_" + indexOfCurrentPDF ,manager2WorkersQueueUrl); 
+				aws.sendSQSMessage(line + "\t" + targetLocationInS3 + "\t" + inputFileNameWithoutExt + "\t" + indexOfCurrentPDF ,manager2WorkersQueueUrl);
                 indexOfCurrentPDF++;
 			}
 		} catch (IOException e) {
 			System.out.println("error in opening file in buffer");
 		}
+        if(s3InputFile.exists()){
+            s3InputFile.delete();
+        }
 		activateWorkers(indexOfCurrentPDF , workerFileRatio);
 	}
     
@@ -152,8 +155,7 @@ public class Manager {
                 int updatedCounter = lastCounter++;
                 locationToCountTarget.put(locationInS3 , lastCounter);
                 if(updatedCounter == locationToCountTarget.get(locationInS3)) {
-                    
-                    // Extract the substring up to the last '/'
+                    // Extract the substring up to the last '/' ---> s3:/bucket-name/LocalApp+ID/outputFiles/malawach.txt ---> s3:/bucket-name/LocalApp+ID/outputFiles/
                     int lastSlashIndex = locationInS3.lastIndexOf('/');
                     String outputFolderPath = locationInS3.substring(0, lastSlashIndex + 1);
                     threadPool.submit(() -> mergeToSummaryAndUploadToS3(outputFolderPath));
@@ -180,7 +182,14 @@ public class Manager {
             List<String> inputFileList = aws.getFilesInFolder(outputFolderPath.replace("/outputFiles/", "/inputFiles/"));
             aws.downloadFileFromS3(inputFileList.get(0), LocalAppInputFile);
             File summaryFile = new File("summary.txt");
-        
+
+
+            // Remove the 's3://bucket/' part from the path
+            String path = outputFolderPath.substring(outputFolderPath.indexOf("LocalApp"));
+
+            // Extract the part after "LocalApp"
+            String localAppId = path.substring("LocalApp".length(), path.indexOf("/", "LocalApp".length()));
+
             // Open the summary file for writing
             BufferedWriter writer = new BufferedWriter(new FileWriter(summaryFile));
             // Open the input file for reading
@@ -191,27 +200,58 @@ public class Manager {
             for (String newFileUrl : filesToMerge) {
                 // Read the next line from the input file
                 inputLine = inputReader.readLine();
-                
+
+                //Parse the newFileUrl and understand if there is Error
+                int lastSlashIndex = newFileUrl.lastIndexOf("/");
+                String fileNameWithIndex = newFileUrl.substring(lastSlashIndex + 1, newFileUrl.length());
+                boolean isError = fileNameWithIndex.contains("Error");
                 
                 // If there's no more lines in input file, break the loop
                 if (inputLine == null) {
                     break;
                 }
                 
-                // Write the line from the input file along with the file URL into summary.txt
-                writer.write(inputLine +  "\t" + newFileUrl);
+                // Write the line from the input file along with the file URL into summary.txt, Or add the Error Description if occured
+                if (isError) {
+                    // Download and read the error file content
+                    File errorFile = new File("errorFile.txt");
+                    aws.downloadFileFromS3(newFileUrl, errorFile);  // Download the error file from S3
+            
+                    // Read the error description
+                    StringBuilder errorDescription = new StringBuilder();
+                    try (BufferedReader errorReader = new BufferedReader(new FileReader(errorFile))) {
+                        String errorLine;
+                        while ((errorLine = errorReader.readLine()) != null) {
+                            errorDescription.append(errorLine).append(" ");  // Collect all lines from the error file (containing Error message)
+                        }
+                    }
+            
+                    // Write the input line along with the formatted error details
+                    //Example: InputLine1 =(operation originalUrl)   Error Message: File not found
+                    writer.write(inputLine + "\t" + errorDescription.toString().trim());
+                    if(errorFile.exists())
+                        errorFile.delete();
+                } else {
+                    // Normal case: write the input line with the file URL
+                    writer.write(inputLine + "\t" + newFileUrl);
+                }
                 writer.newLine(); // New line for the next entry
             }
             
-            // Close the readers and writers
+            //Close resources streams and inputFile
             inputReader.close();
             writer.close();
+            if(LocalAppInputFile.exists()){
+                LocalAppInputFile.delete();
+            }
+
             
             // delete the urls of the workers  ??
-            // aws.deleteAllFilesInFolder(outputFolderPath); ??
+            //aws.deleteAllFilesInFolder(outputFolderPath); ??
 
             // Upload the summary file to S3
-            aws.uploadFileToS3(outputFolderPath + "/summaryFile/" , summaryFile);    
+            aws.uploadFileToS3(outputFolderPath + "/summaryFile/" , summaryFile);
+            aws.sendSQSMessage(outputFolderPath, aws.getQueueUrl("manager2Local" + localAppId));    
         }
         catch (Exception e) {
             e.printStackTrace();
@@ -228,6 +268,7 @@ public class Manager {
             }
         }
         System.out.println("Terminated all Workers");
+        
         List<Instance> managers = aws.getAllInstancesWithLabel(AWS.Label.Manager);
         for(Instance managerInstance : managers) {
             if(managerInstance.state().name() == InstanceStateName.RUNNING) {
@@ -264,51 +305,3 @@ public class Manager {
         manager.deActivateEC2Nodes();
     }
 }
-
-
-
-
-
-
-
-
-
-
-
-//connect between the input url to the output url
-        // when the manager gets a message from the localApp - check if its terminate message or an sqs message
-        // maybe add stopped mode
-    
-    // Reads the input file and processes each line based on the operation (ToImage, ToHTML, ToText)
-    // public static void processInputFile(String inputFilePath) {
-    //     try {
-    //         
-
-    //             // Call the appropriate method based on the operation
-    //             switch (operation) {
-    //                 case "ToImage":
-    //                     PDFUtils.ToImage(pdfUrl);
-    //                     break;
-    //                 case "ToHTML":
-    //                     PDFUtils.ToHTML(pdfUrl);
-    //                     break;
-    //                 case "ToText":
-    //                     PDFUtils.ToText(pdfUrl);
-    //                     break;
-    //                 default:
-    //                     System.out.println("Unknown operation: " + operation);
-    //             }
-    //         }
-    //         reader.close();
-    //     }
-    //     catch(IOException e) {
-    //         System.out.println("PDF not found or Invalid"); 
-    //         e.printStackTrace();         
-    //     }
-    // }
-
-
-    // Split the line by tab
-    // String[] parts = line.split("\t");
-    // String operation = parts[0];
-    // String pdfOriginalUrl = parts[1];
