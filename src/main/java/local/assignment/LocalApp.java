@@ -13,7 +13,6 @@ import java.io.FileReader;
 import java.io.FileWriter;
 import java.io.IOException;
 import java.io.PrintWriter;
-import java.util.ArrayList;
 import java.util.List;
 import java.util.Random;
 import java.util.concurrent.TimeUnit;
@@ -232,12 +231,12 @@ public class LocalApp {
         app.aws.sendSQSMessage("s3:/" + app.aws.bucketName + "/LocalApp"  + app.localAppID + "/inputFiles/" + inputFileName + "\t" + terminateMode + "\t" + workerFileRatio + "\t" + app.countLinesInFile , app.local2ManagerUrl);
         
         //Step 5: wait for the Manager to finish and when he does, takes the location of output file in S3
-        String OutputLocationInS3 = app.waitForSQSMessage(); 
+        String summaryFileLocationInS3 = app.waitForSQSMessage(); 
         
-        //Step 6: Download the summaryFile from S3 , Assuming the files are coming back in same order as input 
+        //Step 6: Download the summaryFile from S3
         String summaryFileName = "SummaryFile_localApp" + app.localAppID + ".txt";
         File summaryFile = new File(summaryFileName);
-        app.aws.downloadFileFromS3(OutputLocationInS3, summaryFile);
+        app.aws.downloadFileFromS3(summaryFileLocationInS3, summaryFile);
 
         //Step 7: Create the HTML
         app.generateHtmlFileFromSummary(summaryFileName, htmlFileName);

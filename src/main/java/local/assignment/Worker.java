@@ -19,14 +19,15 @@ public class Worker {
         Worker worker = new Worker();
         while(true) {
             List<Message> messages = worker.aws.getSQSMessagesList(worker.manager2WorkersQueueUrl , 1,10);
-            while(!messages.isEmpty()) {
-                //message format: operation   originalUrl     targetLocationInS3      inputFileName_index (seperated by tabs) 
+            if(!messages.isEmpty()) {
+                //message format: operation   originalUrl     targetLocationInS3    inputFileName  index (seperated by tabs) 
                 //targetLocation in S3 -->  s3:/localapp123/outputFiles/
-                String[] splitMessage = messages.get(0).body().split("\t");
+                Message message = messages.get(0);
+                String[] splitMessage = message.body().split("\t");
                 String operation = splitMessage[0];
                 String originalUrl = splitMessage[1];
                 String targetlLocationInS3 = splitMessage[2];
-                String fileNameToUploadWithIndex = splitMessage[3];
+                String fileNameToUploadWithIndex = splitMessage[3] + "_" + splitMessage[4];//---> input-sample-1_1
 
                 File fileAfterOperation;
                 Exception exc = null;
@@ -60,12 +61,11 @@ public class Worker {
                 if (exc != null) { //Error - an exception has occured in the operation process
                     
                     //Check if files Exists and Delete it 
-                    if (fileAfterOperation.exists() && !fileAfterOperation.delete()) {
-                        //Handling the error if the file deletion fails
-                        System.err.println("Failed to delete file: " + fileAfterOperation.getPath());
-                    }
+                    if (fileAfterOperation.exists())
+                        fileAfterOperation.delete();
+                    
                     int dotIndex = fileNameToUploadWithIndex.lastIndexOf(".");
-                    fileNameToUploadWithIndex = fileNameToUploadWithIndex.substring(0, dotIndex)  + "_Error.txt";
+                    fileNameToUploadWithIndex = fileNameToUploadWithIndex.substring(0, dotIndex)  + "_Error.txt"; //input-sample-1_index_Error.txt
 
                     // Generate an error file with the same index but a distinct marker
                     fileAfterOperation = new File(fileNameToUploadWithIndex);
@@ -82,14 +82,16 @@ public class Worker {
                 try {
                     worker.aws.uploadFileToS3(targetlLocationInS3, fileAfterOperation);
                     //Send SQS message to the manager
-                    worker.aws.sendSQSMessage(targetlLocationInS3 + "/" + fileNameToUploadWithIndex , worker.workers2ManagerQueueUrl);
+                    worker.aws.sendSQSMessage(targetlLocationInS3 + fileNameToUploadWithIndex , worker.workers2ManagerQueueUrl);
                     if(fileAfterOperation.exists())
                         fileAfterOperation.delete();
                 }
                 catch(Exception e) {
                     System.out.println("Exception occured: couldn't upload file to S3");
-                }    
+                }
+                worker.aws.deleteMessage(worker.manager2WorkersQueueUrl, message.receiptHandle());    
             }
+            
         } 
 
     }

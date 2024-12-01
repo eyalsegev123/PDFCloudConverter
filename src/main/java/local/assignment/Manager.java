@@ -19,7 +19,6 @@ import software.amazon.awssdk.services.ec2.model.RunInstancesResponse;
 import software.amazon.awssdk.services.sqs.model.Message;
 
 
-
 public class Manager {
     protected AWS aws = AWS.getInstance();
     protected int activeWorkers = 0;
@@ -60,7 +59,7 @@ public class Manager {
                 // Process S3 file URLs when a new task is received
                 threadPool.submit(() -> processAndDivideS3File(body[0], workFileRatio));
                 // Delete message from queue after processing
-                aws.deleteMessage(localAppsQueueUrl, message.receiptHandle()); 
+                aws.deleteMessage(localAppsQueueUrl, message.receiptHandle());
                 if(needsToTerminate){
                     //Retreives the number of total localApps that were sent until terminate message
                     totalLocalApps = locationToCountTarget.size();
@@ -247,10 +246,10 @@ public class Manager {
 
             
             // delete the urls of the workers  ??
-            //aws.deleteAllFilesInFolder(outputFolderPath); ??
+            aws.deleteAllFilesInFolder(outputFolderPath);
 
             // Upload the summary file to S3
-            aws.uploadFileToS3(outputFolderPath + "/summaryFile/" , summaryFile);
+            aws.uploadFileToS3(outputFolderPath , summaryFile);
             aws.sendSQSMessage(outputFolderPath, aws.getQueueUrl("manager2Local" + localAppId));    
         }
         catch (Exception e) {
