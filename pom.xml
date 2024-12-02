@@ -88,7 +88,7 @@
                       <goal>java</goal>
                   </goals>
                   <configuration>
-                      <mainClass>local.assignment.LocalApp</mainClass>
+                      <mainClass>local.assignment.Manager</mainClass>
                   </configuration>
               </execution>
           </executions>
@@ -102,7 +102,7 @@
         <configuration>
             <archive>
                 <manifestEntries>
-                    <Main-Class>local.assignment.LocalApp</Main-Class>
+                    <Main-Class>local.assignment.Manager</Main-Class>
                 </manifestEntries>
             </archive>
         </configuration>

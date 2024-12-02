@@ -29,8 +29,6 @@ public class Manager {
     protected ThreadPoolExecutor threadPool;
     protected boolean needsToTerminate = false;
     protected int NUMBER_OF_THREADS = 5;
-    protected String ami = "" ; 
-    protected String script ="";
     protected HashMap<String , Integer> locationToCountTarget = new HashMap<>(); // locations in s3 :: number of files we need to edit
     protected HashMap<String , Integer> locationToCurrentCounter = new HashMap<>(); // locations in s3 :: number of files we already edited
     protected int totalLocalApps = 0;
@@ -120,7 +118,7 @@ public class Manager {
             activeWorkers += numWorkersToAdd;
         }
         for (int i = 0; i < numWorkersToAdd; i++) {
-            RunInstancesResponse response = aws.runInstanceFromAmiWithScript(ami , InstanceType.T2_NANO , 1 , 1 , script);
+            RunInstancesResponse response = aws.runInstanceFromAmiWithScript(InstanceType.T2_NANO , 1 , 1 , "Worker");
             String newInstanceId = response.instances().get(0).instanceId();
             aws.tagInstanceAsWorker(newInstanceId);
         }
@@ -244,13 +242,9 @@ public class Manager {
                 LocalAppInputFile.delete();
             }
 
-            
-            // delete the urls of the workers  ??
-            aws.deleteAllFilesInFolder(outputFolderPath);
-
             // Upload the summary file to S3
-            aws.uploadFileToS3(outputFolderPath , summaryFile);
-            aws.sendSQSMessage(outputFolderPath, aws.getQueueUrl("manager2Local" + localAppId));    
+            aws.uploadFileToS3(outputFolderPath + "summaryFile/", summaryFile);
+            aws.sendSQSMessage(outputFolderPath + "summaryFile/", aws.getQueueUrl("manager2Local" + localAppId));    
         }
         catch (Exception e) {
             e.printStackTrace();

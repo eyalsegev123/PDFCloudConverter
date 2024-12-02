@@ -12,26 +12,25 @@ import software.amazon.awssdk.services.sqs.SqsClient;
 import software.amazon.awssdk.services.sqs.model.*;
 import software.amazon.awssdk.services.ec2.model.Tag;
 
-
 import java.io.*;
 import java.nio.charset.StandardCharsets;
 import java.util.*;
 
 public class AWS {
 
-    public final String IMAGE_AMI = "ami-04aabd45b36980079";
     public Region region1 = Region.US_WEST_2;
     protected final S3Client s3;
     protected final SqsClient sqs;
     protected final Ec2Client ec2;
     protected final String bucketName;
     protected static AWS instance = null;
-    
+    protected final String ami = "ami-0412b8b02f19cbcf0";
+
     protected AWS() {
         this.s3 = S3Client.builder().region(region1).build();
         this.sqs = SqsClient.builder().region(region1).build();
         this.ec2 = Ec2Client.builder().region(region1).build();
-        this.bucketName = "malawach";
+        this.bucketName = "beni-haagadi";
     }
 
     public static AWS getInstance() {
@@ -42,12 +41,12 @@ public class AWS {
     }
 
     ////////////////////////////////////////// EC2
-    
+
     public void startInstance(String instanceId) {
         try {
             StartInstancesRequest startRequest = StartInstancesRequest.builder()
-                .instanceIds(instanceId)
-                .build();
+                    .instanceIds(instanceId)
+                    .build();
             ec2.startInstances(startRequest);
             System.out.println("Manager node activated: " + instanceId);
         } catch (Exception e) {
@@ -71,7 +70,9 @@ public class AWS {
         }
     }
 
-    public RunInstancesResponse runInstanceFromAmiWithScript(String ami, InstanceType instanceType, int min, int max, String script) {
+    public RunInstancesResponse runInstanceFromAmiWithScript(InstanceType instanceType, int min, int max,
+            String tagValue) {
+        String script = getUserDataScript(tagValue);
         RunInstancesRequest runInstancesRequest = RunInstancesRequest.builder()
                 .imageId(ami)
                 .instanceType(instanceType)
@@ -85,6 +86,16 @@ public class AWS {
         } catch (Exception e) {
             throw new RuntimeException("Failed to launch instance with script", e);
         }
+    }
+
+    protected String getUserDataScript(String tagValue) {
+        // Customize this script to download and run the correct JAR file based on the
+        // instance tag
+        String s3Key = tagValue.equals("Manager") ? "manager.jar" : "worker.jar";
+
+        return "#!/bin/bash\n" +
+                "aws s3 cp s3://" + bucketName + "/jars/" + s3Key + "\n" +
+                "java -jar /home/ec2-user/" + s3Key + "\n";
     }
 
     public List<Instance> getAllInstances() {
@@ -135,37 +146,35 @@ public class AWS {
                 .build();
 
         s3.putObject(request, file.toPath());
-        return "s3:/" + bucketName + "/" + keyPath;
+        return "s3://" + bucketName + "/" + keyPath;
     }
 
     public void downloadFileFromS3(String keyPath, File outputFile) {
         System.out.println("Start downloading file " + keyPath + " to " + outputFile.getPath());
-    
+
         GetObjectRequest getObjectRequest = GetObjectRequest.builder()
                 .bucket(bucketName)
                 .key(keyPath)
                 .build();
-    
+
         ResponseBytes<GetObjectResponse> objectBytes = null;
         OutputStream os = null;
-    
+
         try {
             // Retrieve the object bytes from S3
             objectBytes = s3.getObjectAsBytes(getObjectRequest);
-    
+
             // Prepare the output stream for saving the file
             os = new FileOutputStream(outputFile);
-    
+
             // Convert the object bytes to a byte array and write to the output file
             byte[] data = objectBytes.asByteArray();
             os.write(data);
             System.out.println("Successfully obtained bytes from an S3 object");
-    
-        } 
-        catch (Exception e) {
+
+        } catch (Exception e) {
             throw new RuntimeException("Failed to download file from S3", e);
-        } 
-        finally {
+        } finally {
             // Close the resources manually
             if (objectBytes != null) {
                 // No need to close objectBytes, since it does not implement AutoCloseable.
@@ -179,7 +188,7 @@ public class AWS {
                     ex.printStackTrace();
                 }
             }
-    
+
             // Close the OutputStream
             if (os != null) {
                 try {
@@ -191,7 +200,6 @@ public class AWS {
             }
         }
     }
-    
 
     public void createBucket(String bucketName) {
         s3.createBucket(CreateBucketRequest.builder()
@@ -209,7 +217,8 @@ public class AWS {
 
     public boolean checkIfBucketExists(String bucketName) {
         try {
-            // Try to get the head information of the bucket (this will throw an exception if the bucket doesn't exist)
+            // Try to get the head information of the bucket (this will throw an exception
+            // if the bucket doesn't exist)
             HeadBucketRequest request = HeadBucketRequest.builder().bucket(bucketName).build();
             s3.headBucket(request);
             return true; // If no exception, the bucket exists
@@ -217,6 +226,10 @@ public class AWS {
             // If NoSuchBucketException is caught, the bucket doesn't exist
             System.out.println("Bucket " + bucketName + " does not exist.");
             return false;
+        } catch (BucketAlreadyOwnedByYouException e) {
+            // If the bucket already exists and is owned by you, handle that case
+            System.out.println("Bucket " + bucketName + " is already owned by you.");
+            return true; // The bucket exists and is owned by you
         } catch (Exception e) {
             // Handle other exceptions (e.g., permission issues)
             System.err.println("Error checking if bucket exists: " + e.getMessage());
@@ -226,11 +239,11 @@ public class AWS {
 
     public void deleteAllObjectsFromBucket(String bucketName) {
         // List objects from the bucket (Paginator or Iterable)
-        ListObjectsV2Iterable contents = listObjectsInBucket(bucketName); 
-    
+        ListObjectsV2Iterable contents = listObjectsInBucket(bucketName);
+
         // Initialize the list for ObjectIdentifiers
         List<ObjectIdentifier> keys = new ArrayList<>();
-        
+
         // Iterate through each page of objects in the paginator
         for (ListObjectsV2Response page : contents) {
             // Add each object key to the list
@@ -238,14 +251,14 @@ public class AWS {
                 keys.add(ObjectIdentifier.builder().key(content.key()).build());
             }
         }
-    
+
         // Prepare the Delete request
         Delete del = Delete.builder().objects(keys).build();
         DeleteObjectsRequest multiObjectDeleteRequest = DeleteObjectsRequest.builder()
                 .bucket(bucketName)
                 .delete(del)
                 .build();
-    
+
         try {
             // Execute the delete operation
             s3.deleteObjects(multiObjectDeleteRequest);
@@ -254,7 +267,7 @@ public class AWS {
             throw new RuntimeException("Failed to delete objects from bucket", e);
         }
     }
-    
+
     private void deleteEmptyBucket(String bucketName) {
         DeleteBucketRequest deleteBucketRequest = DeleteBucketRequest.builder()
                 .bucket(bucketName)
@@ -283,9 +296,9 @@ public class AWS {
         try {
             Tag managerTag = Tag.builder().key("Label").value(Label.Manager.name()).build();
             CreateTagsRequest createTagsRequest = CreateTagsRequest.builder()
-                .resources(instanceId)
-                .tags(managerTag)
-                .build();
+                    .resources(instanceId)
+                    .tags(managerTag)
+                    .build();
             ec2.createTags(createTagsRequest);
             System.out.println("New Manager node tagged: " + instanceId);
         } catch (Exception e) {
@@ -298,9 +311,9 @@ public class AWS {
         try {
             Tag workerTag = Tag.builder().key("Label").value(Label.Worker.name()).build();
             CreateTagsRequest createTagsRequest = CreateTagsRequest.builder()
-                .resources(instanceId)
-                .tags(workerTag)
-                .build();
+                    .resources(instanceId)
+                    .tags(workerTag)
+                    .build();
             ec2.createTags(createTagsRequest);
             System.out.println("New Worker node tagged: " + instanceId);
         } catch (Exception e) {
@@ -321,7 +334,7 @@ public class AWS {
             ListObjectsV2Response listRes;
             do {
                 listRes = s3.listObjectsV2(listReq);
-                for (S3Object s3Object : listRes.contents()) 
+                for (S3Object s3Object : listRes.contents())
                     fileKeys.add(s3Object.key());
 
                 // Prepare the next request in case of pagination
@@ -335,7 +348,6 @@ public class AWS {
         }
         return fileKeys;
     }
-
 
     public void deleteAllFilesInFolder(String folderPrefix) {
         // Ensure folderPrefix ends with "/"
@@ -404,23 +416,20 @@ public class AWS {
         return Integer.parseInt(attributes.get(QueueAttributeName.APPROXIMATE_NUMBER_OF_MESSAGES));
     }
 
-    
-
     public void sendSQSMessage(String messageBody, String SQSUrl) {
         try {
             SendMessageRequest request = SendMessageRequest.builder()
-                .queueUrl(SQSUrl)
-                .messageBody(messageBody)
-                .build();
+                    .queueUrl(SQSUrl)
+                    .messageBody(messageBody)
+                    .build();
 
             sqs.sendMessage(request);
             System.out.println("Message sent to queue: " + SQSUrl + "\nMessage Sent: " + messageBody);
-        } catch (SdkException e) {  // Catching AWS SDK exceptions
+        } catch (SdkException e) { // Catching AWS SDK exceptions
             System.err.println("Failed to send message to queue: " + SQSUrl);
             System.err.println("Error: " + e.getMessage());
         }
     }
-
 
     public List<Message> getSQSMessagesList(String queueUrl, Integer maxNumberOfMessages, Integer waitTimeSeconds) {
         try {
@@ -428,7 +437,7 @@ public class AWS {
             ReceiveMessageRequest receiveMessageRequest = ReceiveMessageRequest.builder()
                     .queueUrl(queueUrl)
                     .maxNumberOfMessages(maxNumberOfMessages) // Fetch up to x messages at a time
-                    .waitTimeSeconds(waitTimeSeconds)    // Long polling for y seconds
+                    .waitTimeSeconds(waitTimeSeconds) // Long polling for y seconds
                     .build();
 
             // Fetch messages
@@ -452,7 +461,7 @@ public class AWS {
                     .queueUrl(queueUrl)
                     .receiptHandle(receiptHandle)
                     .build();
-    
+
             // Delete the message from the queue
             sqs.deleteMessage(deleteMessageRequest);
             System.out.println("Message deleted successfully.");
@@ -460,9 +469,6 @@ public class AWS {
             System.err.println("Error while deleting message: " + e.getMessage());
         }
     }
-
-    
-
 
     ///////////////////////
 
