@@ -31,7 +31,7 @@ public class Manager {
     protected int NUMBER_OF_THREADS = 5;
     protected HashMap<String , Integer> locationToCountTarget = new HashMap<>(); // locations in s3 :: number of files we need to edit
     protected HashMap<String , Integer> locationToCurrentCounter = new HashMap<>(); // locations in s3 :: number of files we already edited
-    protected int totalLocalApps = 0;
+    protected int totalLocalApps = -1;
     //*** */
     // figure out the ami and script
     // *** 
@@ -39,6 +39,7 @@ public class Manager {
     
         // Listen for tasks in the SQS queue
     protected void listenForTasksLocal() {
+        System.out.println(Thread.currentThread() + "Trying to get local app message");
         while (true) {
             List<Message> messages = aws.getSQSMessagesList(localAppsQueueUrl , 1 , 10);
             if (!messages.isEmpty()) {
@@ -49,13 +50,13 @@ public class Manager {
                 int workFileRatio = Integer.parseInt(body[2]);
                 int countLines = Integer.parseInt(body[3]);
                 
-                // s3:/localapp123/inputFiles/input-sample-1.txt ----> s3:/localapp123/outputFiles/input-sample-1.txt
+                // Localapp123/inputFiles/input-sample-1.txt ----> Localapp123/outputFiles/input-sample-1.txt
                 String targetLocationInS3 = body[0].replace("/inputFiles/", "/outputFiles/");
                 locationToCountTarget.put(targetLocationInS3, countLines);
                 locationToCurrentCounter.put(targetLocationInS3, 0);
                 
                 // Process S3 file URLs when a new task is received
-                threadPool.submit(() -> processAndDivideS3File(body[0], workFileRatio));
+                threadPool.submit(() -> processAndDivideS3File(body[0], workFileRatio, countLines));
                 // Delete message from queue after processing
                 aws.deleteMessage(localAppsQueueUrl, message.receiptHandle());
                 if(needsToTerminate){
@@ -69,16 +70,16 @@ public class Manager {
         System.out.println("listener of LocalApps finished his job");   
     }
 
-	protected void processAndDivideS3File(String inputFileLocationInS3, int workerFileRatio){
-        
+	protected void processAndDivideS3File(String inputFileLocationInS3, int workerFileRatio, int countLines){
+        System.out.println(Thread.currentThread() + ": is getting the necessary file");
         String[] splitLocation = inputFileLocationInS3.split("/");
         //Download file from S3 
-		File s3InputFile = new File(splitLocation[2] + "_" + splitLocation[4]); // localApp+ID_fileName
+		File s3InputFile = new File(splitLocation[0] + "_" + splitLocation[2]); // localApp+ID_inputFileName
 		aws.downloadFileFromS3(inputFileLocationInS3, s3InputFile);
 		int indexOfCurrentPDF = 0;
         
         // Extract the base name
-        String inputFileNameWithExt = splitLocation[4]; //input-sample-1.txt
+        String inputFileNameWithExt = splitLocation[2]; //input-sample-1.txt
         int dotIndex = inputFileNameWithExt.lastIndexOf(".");
         String inputFileNameWithoutExt = inputFileNameWithExt.substring(0, dotIndex) ; //input-sample-1 (without extension)
 
@@ -86,13 +87,18 @@ public class Manager {
         int lastSlashIndex = inputFileLocationInS3.lastIndexOf("/");
         String targetLocationInS3 = inputFileLocationInS3.substring(0, lastSlashIndex+1).replace("/inputFiles/", "/outputFiles/");
         
+        //Activating workers, according to number of files and workerFile ratio
+        activateWorkers(countLines , workerFileRatio);
+
         //Send a message for each subFile in the input-file
+        System.out.println(Thread.currentThread() + ": Starting the dividing process ");
 		try (BufferedReader reader = new BufferedReader(new FileReader(s3InputFile))) {
 			String line;
             while ((line = reader.readLine()) != null) {
                 // line=(operation   originalUrl)   targetLocation     inputFileName_index (seperated by tabs) 
 				aws.sendSQSMessage(line + "\t" + targetLocationInS3 + "\t" + inputFileNameWithoutExt + "\t" + indexOfCurrentPDF ,manager2WorkersQueueUrl);
                 indexOfCurrentPDF++;
+                System.out.println("Manager sent message to manager2Workers queue: " + indexOfCurrentPDF);
 			}
 		} catch (IOException e) {
 			System.out.println("error in opening file in buffer");
@@ -100,10 +106,10 @@ public class Manager {
         if(s3InputFile.exists()){
             s3InputFile.delete();
         }
-		activateWorkers(indexOfCurrentPDF , workerFileRatio);
 	}
     
     protected void activateWorkers(int numOfPdfs, int workerFileRatio) {
+        System.out.println(Thread.currentThread() + ": activating workers");
         int numWorkersToAdd;
         synchronized(lockActiveWorkers) {
             // Calculate required workers
@@ -134,6 +140,7 @@ public class Manager {
             }
         } 
         catch (InterruptedException e) {
+            System.out.println("Interrupted exception: shutting down ThreadPool");
             threadPool.shutdownNow();  // Handle interruption
             Thread.currentThread().interrupt();
         }
@@ -143,6 +150,7 @@ public class Manager {
         int numberOfAppsSubmitted = 0;
         while (true) {
             //The worker sends location of the URL in S3
+            System.out.println(Thread.currentThread() + ": attempting to get messages from workers");
             List<Message> messages = aws.getSQSMessagesList(workers2ManagerQueueUrl , 5 , 2);
             while (!messages.isEmpty()) {
                 Message message = messages.get(0);
@@ -166,11 +174,19 @@ public class Manager {
                 System.out.println("Thread Pool finishes its last tasks and will be terminated");
                 break;
             }
+            try{
+                Thread.sleep(5000);
+            }
+            catch (InterruptedException e) {
+                System.err.println(Thread.currentThread() + ": Interrupted while waiting for threads to complete.");
+                Thread.currentThread().interrupt(); // Preserve interrupt status
+            }
         }
         System.out.println("listener for Workers finished his job");
     }
 
     protected void mergeToSummaryAndUploadToS3(String outputFolderPath) {
+        System.out.println(Thread.currentThread() + ": is creating the summary file");
         try {  
             List<String> filesToMerge = aws.getFilesInFolder(outputFolderPath);
             //any file in the list will be represented like this:  LocalApp123/outputFiles/ 

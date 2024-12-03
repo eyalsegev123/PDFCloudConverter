@@ -16,6 +16,7 @@ public class Worker {
     
     // Fetch and process messages from the queue
     private void processMessages() {
+        System.out.println(Thread.currentThread() + "Hi im worker I'm trying to get messages from manager2WorkersQueue");
         List<Message> messages = aws.getSQSMessagesList(manager2WorkersQueueUrl, 1, 10);
         if (!messages.isEmpty()) {
             Message message = messages.get(0);
@@ -25,6 +26,7 @@ public class Worker {
 
     // Handle individual messages
     private void handleMessage(Message message) {
+        System.out.println(Thread.currentThread() + ": handling the message");
         String[] splitMessage = message.body().split("\t");
         String operation = splitMessage[0];
         String originalUrl = splitMessage[1];
@@ -45,6 +47,7 @@ public class Worker {
     private File performOperation(String operation, String originalUrl, String fileName) throws Exception {
         File file = null;
         Exception exc = null;
+        System.out.println("Starting to perform: " + operation + "On file: " + fileName);
 
         switch (operation) {
             case "ToHTML":
@@ -71,6 +74,8 @@ public class Worker {
 
     // Handle errors and create an error file
     private File handleError(Exception exc, String fileName) throws IOException {
+        System.out.println(Thread.currentThread() + " Handling error on file: " + fileName);
+        System.out.println(exc.getMessage());
         String errorFileName = fileName + "_Error.txt";
         File errorFile = new File(errorFileName);
         try (FileWriter writer = new FileWriter(errorFile)) {
