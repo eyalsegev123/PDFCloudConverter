@@ -13,10 +13,10 @@ public class Worker {
     protected final String manager2WorkersQueueUrl = aws.getQueueUrl("manager2WorkersQueue");
     protected final String workers2ManagerQueueUrl = aws.getQueueUrl("workers2ManagerQueue");
 
-    
     // Fetch and process messages from the queue
     private void processMessages() {
-        System.out.println(Thread.currentThread() + "Hi im worker I'm trying to get messages from manager2WorkersQueue");
+        System.out
+                .println(Thread.currentThread() + "Hi im worker I'm trying to get messages from manager2WorkersQueue");
         List<Message> messages = aws.getSQSMessagesList(manager2WorkersQueueUrl, 1, 10);
         if (!messages.isEmpty()) {
             Message message = messages.get(0);
@@ -36,6 +36,8 @@ public class Worker {
         try {
             File fileAfterOperation = performOperation(operation, originalUrl, fileNameToUploadWithIndex);
             uploadAndNotify(fileAfterOperation, targetLocationInS3, fileNameToUploadWithIndex);
+            if (fileAfterOperation.exists())
+                fileAfterOperation.delete();
         } catch (Exception e) {
             System.out.println("Error processing message: " + e.getMessage());
         } finally {
@@ -87,10 +89,8 @@ public class Worker {
     // Upload file to S3 and notify the manager
     private void uploadAndNotify(File file, String targetLocationInS3, String fileNameToUploadWithIndex) {
         try {
-            aws.uploadFileToS3(targetLocationInS3, file);
+            aws.uploadFileToS3(targetLocationInS3 + fileNameToUploadWithIndex, file);
             aws.sendSQSMessage(targetLocationInS3 + fileNameToUploadWithIndex, workers2ManagerQueueUrl);
-            if (file.exists()) 
-                file.delete();
         } catch (Exception e) {
             System.out.println("Failed to upload or notify: " + e.getMessage());
         }
@@ -98,7 +98,7 @@ public class Worker {
 
     public static void main(String[] args) {
         Worker worker = new Worker();
-        while (true) 
+        while (true)
             worker.processMessages();
     }
 }
