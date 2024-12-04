@@ -12,6 +12,7 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 
+
 import software.amazon.awssdk.core.ResponseBytes;
 import software.amazon.awssdk.core.exception.SdkException;
 import software.amazon.awssdk.regions.Region;
@@ -66,6 +67,7 @@ public class AWS {
     protected final String bucketName;
     protected static AWS instance = null;
     protected final String ami = "ami-061dd8b45bc7deb3d";
+    
 
     protected AWS() {
         this.s3 = S3Client.builder().region(region1).build();

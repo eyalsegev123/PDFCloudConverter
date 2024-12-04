@@ -103,10 +103,12 @@ public class Manager {
         try (BufferedReader reader = new BufferedReader(new FileReader(s3InputFile))) {
             String line;
             while ((line = reader.readLine()) != null) {
-                // line=(operation originalUrl) targetLocation inputFileName_index (seperated by
-                // tabs)
-                aws.sendSQSMessage(
-                        line + "\t" + targetLocationInS3 + "\t" + inputFileNameWithoutExt + "\t" + indexOfCurrentPDF,
+                // line=(operation originalUrl) targetLocation inputFileName_index (seperated by tabs)
+                String[] lineSplit = line.split("\t");
+                String operation = lineSplit[0];
+                String PDFUrl = lineSplit[1];
+                 aws.sendSQSMessage(
+                        operation + "\t" + PDFUrl + "\t" + targetLocationInS3 + "\t" + inputFileNameWithoutExt + "\t" + indexOfCurrentPDF,
                         manager2WorkersQueueUrl);
                 indexOfCurrentPDF++;
                 System.out.println("Manager sent message to manager2Workers queue: " + indexOfCurrentPDF);
@@ -267,14 +269,15 @@ public class Manager {
             }
             if (summaryFile.exists()) {
                 try {
-                    aws.uploadFileToS3(outputFolderPath + "summaryFile/", summaryFile);
+                    aws.uploadFileToS3(outputFolderPath + "summaryFile/summary.txt" , summaryFile);
+                    summaryFile.delete();
                 } catch (Exception e) {
                     e.printStackTrace();
                 }
 
             }
 
-            aws.sendSQSMessage(outputFolderPath + "summaryFile/", aws.getQueueUrl("manager2Local" + localAppId));
+            aws.sendSQSMessage(outputFolderPath + "summaryFile/summary.txt", aws.getQueueUrl("manager2Local" + localAppId));
         }
     }
 

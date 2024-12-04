@@ -32,7 +32,11 @@ public class Worker {
         String originalUrl = splitMessage[1];
         String targetLocationInS3 = splitMessage[2];
         String fileNameToUploadWithIndex = splitMessage[3] + "_" + splitMessage[4];
-
+        System.out.println("operation: " + operation);
+        System.out.println("originalUrl: " + originalUrl);
+        System.out.println("targetLocationInS3: " + targetLocationInS3);
+        System.out.println("fileNameToUploadWithIndex: " + fileNameToUploadWithIndex);
+    
         try {
             File fileAfterOperation = performOperation(operation, originalUrl, fileNameToUploadWithIndex);
             uploadAndNotify(fileAfterOperation, targetLocationInS3, fileNameToUploadWithIndex);

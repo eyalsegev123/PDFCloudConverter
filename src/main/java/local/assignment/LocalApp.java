@@ -134,13 +134,21 @@ public class LocalApp {
     // Generate an HTML file from summary data
     private void generateHtmlFileFromSummary(String summaryFileName, String outputHtmlFileName) {
         try (BufferedReader reader = new BufferedReader(new FileReader(summaryFileName));
-                PrintWriter writer = new PrintWriter(new FileWriter(outputHtmlFileName))) {
+            PrintWriter writer = new PrintWriter(new FileWriter(outputHtmlFileName))) {
 
-            // Write HTML header
+            // Write HTML header with a clean style
             writer.println("<!DOCTYPE html>");
             writer.println("<html>");
             writer.println("<head>");
             writer.println("<title>URL Conversion Results</title>");
+            writer.println("<style>");
+            writer.println("    body { font-family: Arial, sans-serif; margin: 20px; }");
+            writer.println("    h1 { text-align: center; color: #333; }");
+            writer.println("    ul { list-style-type: none; padding: 0; }");
+            writer.println("    li { margin-bottom: 10px; }");
+            writer.println("    .operation { font-weight: bold; color: #555; }");
+            writer.println("    .url { text-decoration: none; color: #0066cc; }");
+            writer.println("</style>");
             writer.println("</head>");
             writer.println("<body>");
             writer.println("<h1>URL Conversion Results</h1>");
@@ -152,12 +160,13 @@ public class LocalApp {
                 // Split by tabs (or any other delimiter, adjust as necessary)
                 String[] parts = line.split("\t"); // Splitting by tab character
                 if (parts.length >= 3) {
-                    String operation = parts[0]; // First element: operation
-                    String formerUrl = parts[1]; // Second element: former URL
-                    String newUrl = parts[2]; // Third element: new URL
+                    String operation = parts[0].trim(); // First element: operation
+                    String formerUrl = parts[1].trim(); // Second element: former URL
+                    String newUrl = "s3://" + aws.bucketName + "/" + parts[2].trim();   // Third element: new URL
 
-                    // Write the HTML list item
-                    writer.printf("<li>%s: <a href=\"%s\">%s</a> -> <a href=\"%s\">%s</a></li>%n",
+                    // Write the HTML list item with a clear format
+                    writer.printf(
+                            "<li><span class=\"operation\">%s</span>: <a href=\"%s\" class=\"url\">%s</a> ----> <a href=\"%s\" class=\"url\">%s</a></li>%n",
                             operation, formerUrl, formerUrl, newUrl, newUrl);
                 } else {
                     System.err.println("Invalid line format in summary file: " + line);
@@ -173,6 +182,7 @@ public class LocalApp {
             System.err.println("Error generating HTML file from summary: " + e.getMessage());
         }
     }
+
 
     public static String generateUniqueID() {
         Random random = new Random();
