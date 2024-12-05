@@ -21,6 +21,7 @@ import software.amazon.awssdk.services.ec2.model.CreateTagsRequest;
 import software.amazon.awssdk.services.ec2.model.DescribeInstancesRequest;
 import software.amazon.awssdk.services.ec2.model.DescribeInstancesResponse;
 import software.amazon.awssdk.services.ec2.model.Filter;
+import software.amazon.awssdk.services.ec2.model.IamInstanceProfileSpecification;
 import software.amazon.awssdk.services.ec2.model.Instance;
 import software.amazon.awssdk.services.ec2.model.InstanceType;
 import software.amazon.awssdk.services.ec2.model.RunInstancesRequest;
@@ -66,19 +67,19 @@ public class AWS {
     protected final Ec2Client ec2;
     protected final String bucketName;
     protected static AWS instance = null;
-    protected final String ami = "ami-0412b8b02f19cbcf0";
+    protected final String ami = "ami-02e3aef8ea4559659";
 
     //Loading necessary keys for AWS CLI
     protected Dotenv dotenv = Dotenv.load();
-    String accessKey = dotenv.get("AWS_ACCESS_KEY_ID");
-    String secretKey = dotenv.get("AWS_SECRET_ACCESS_KEY");
-    String sessionToken = dotenv.get("AWS_SESSION_TOKEN");
+    protected String accessKey = dotenv.get("AWS_ACCESS_KEY_ID");
+    protected String secretKey = dotenv.get("AWS_SECRET_ACCESS_KEY");
+    protected String sessionToken = dotenv.get("AWS_SESSION_TOKEN");
 
     protected AWS() {
         this.s3 = S3Client.builder().region(region1).build();
         this.sqs = SqsClient.builder().region(region1).build();
         this.ec2 = Ec2Client.builder().region(region1).build();
-        this.bucketName = "beni-haagadi";
+        this.bucketName = "the-amazing-beni";
     }
 
     public static AWS getInstance() {
@@ -121,12 +122,14 @@ public class AWS {
     public RunInstancesResponse runInstanceFromAmiWithScript(InstanceType instanceType, int min, int max,
             String tagValue) {
         String script = getUserDataScript(tagValue);
+        String ec2Role = "LabInstanceProfile";
         RunInstancesRequest runInstancesRequest = RunInstancesRequest.builder()
                 .imageId(ami)
                 .instanceType(instanceType)
                 .minCount(min)
                 .maxCount(max)
                 .userData(Base64.getEncoder().encodeToString(script.getBytes(StandardCharsets.UTF_8)))
+                .iamInstanceProfile(IamInstanceProfileSpecification.builder().name(ec2Role).build())
                 .build();
 
         try {
