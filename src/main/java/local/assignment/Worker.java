@@ -5,7 +5,6 @@ import java.io.FileWriter;
 import java.io.IOException;
 import java.util.List;
 
-import local.assignment.PDFUtils;
 import software.amazon.awssdk.services.sqs.model.Message;
 
 public class Worker {

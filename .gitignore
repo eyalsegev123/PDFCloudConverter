@@ -3,6 +3,5 @@ target/
 dependency-reduced-pom.xml
 input-sample-1.txt
 input-sample-2.txt
+input-sample-3.txt
 .env
-config.json
-credentials.txt

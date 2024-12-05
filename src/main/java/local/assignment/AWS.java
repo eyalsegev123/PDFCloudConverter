@@ -12,7 +12,7 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 
-
+import io.github.cdimascio.dotenv.Dotenv;
 import software.amazon.awssdk.core.ResponseBytes;
 import software.amazon.awssdk.core.exception.SdkException;
 import software.amazon.awssdk.regions.Region;
@@ -66,14 +66,19 @@ public class AWS {
     protected final Ec2Client ec2;
     protected final String bucketName;
     protected static AWS instance = null;
-    protected final String ami = "ami-061dd8b45bc7deb3d";
-    
+    protected final String ami = "ami-0412b8b02f19cbcf0";
+
+    //Loading necessary keys for AWS CLI
+    protected Dotenv dotenv = Dotenv.load();
+    String accessKey = dotenv.get("AWS_ACCESS_KEY_ID");
+    String secretKey = dotenv.get("AWS_SECRET_ACCESS_KEY");
+    String sessionToken = dotenv.get("AWS_SESSION_TOKEN");
 
     protected AWS() {
         this.s3 = S3Client.builder().region(region1).build();
         this.sqs = SqsClient.builder().region(region1).build();
         this.ec2 = Ec2Client.builder().region(region1).build();
-        this.bucketName = "the-amazing-beni";
+        this.bucketName = "beni-haagadi";
     }
 
     public static AWS getInstance() {
@@ -132,14 +137,26 @@ public class AWS {
     }
 
     protected String getUserDataScript(String tagValue) {
-        // Customize this script to download and run the correct JAR file based on the
-        // instance tag
+        // Customize this script to download and run the correct JAR file based on the instance tag
         String s3Key = tagValue.equals("Manager") ? "manager.jar" : "worker.jar";
-
+    
+        // Return the updated user data script with credentials, region, and aws configure commands
         return "#!/bin/bash\n" +
-                "aws s3 cp s3://" + bucketName + "/jars/" + s3Key + "\n" +
+                "cd /home/ec2-user\n" +
+                // Set AWS credentials using aws configure
+                "aws configure set aws_access_key_id " + accessKey + "\n" +
+                "aws configure set aws_secret_access_key " + secretKey + "\n" +
+                "aws configure set aws_session_token " + sessionToken + "\n" +
+                "aws configure set region " + region1 + "\n" +
+                
+                // Download the correct JAR file from S3
+                "aws s3 cp s3://" + bucketName + "/jars/" + s3Key + " /home/ec2-user/" + s3Key + "\n" +
+                
+                // Run the JAR file
                 "java -jar /home/ec2-user/" + s3Key + "\n";
     }
+    
+    
 
     public List<Instance> getAllInstances() {
         DescribeInstancesRequest describeInstancesRequest = DescribeInstancesRequest.builder().build();
