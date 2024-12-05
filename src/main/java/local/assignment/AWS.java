@@ -67,7 +67,7 @@ public class AWS {
     protected final Ec2Client ec2;
     protected final String bucketName;
     protected static AWS instance = null;
-    protected final String ami = "ami-02e3aef8ea4559659";
+    protected final String ami = "ami-0412b8b02f19cbcf0";
 
     //Loading necessary keys for AWS CLI
     protected Dotenv dotenv = Dotenv.load();
@@ -79,7 +79,7 @@ public class AWS {
         this.s3 = S3Client.builder().region(region1).build();
         this.sqs = SqsClient.builder().region(region1).build();
         this.ec2 = Ec2Client.builder().region(region1).build();
-        this.bucketName = "the-amazing-beni";
+        this.bucketName = "beni-haagadi";
     }
 
     public static AWS getInstance() {

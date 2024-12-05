@@ -96,7 +96,7 @@
                       <goal>java</goal>
                   </goals>
                   <configuration>
-                      <mainClass>local.assignment.AwsCleanup</mainClass>
+                      <mainClass>local.assignment.LocalApp</mainClass>
                   </configuration>
               </execution>
           </executions>
@@ -110,7 +110,7 @@
         <configuration>
             <archive>
                 <manifestEntries>
-                    <Main-Class>local.assignment.AwsCleanup</Main-Class>
+                    <Main-Class>local.assignment.LocalApp</Main-Class>
                 </manifestEntries>
             </archive>
         </configuration>
@@ -130,7 +130,7 @@
                 <configuration>
                     <transformers>
                         <transformer implementation="org.apache.maven.plugins.shade.resource.ManifestResourceTransformer">
-                            <mainClass>local.assignment.AwsCleanup</mainClass>
+                            <mainClass>local.assignment.LocalApp</mainClass>
                         </transformer>
                     </transformers>
                 </configuration>
