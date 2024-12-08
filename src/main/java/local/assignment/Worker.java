@@ -15,7 +15,7 @@ public class Worker {
     // Fetch and process messages from the queue
     private void processMessages() {
         System.out
-                .println(Thread.currentThread() + "Hi im worker I'm trying to get messages from manager2WorkersQueue");
+                .println(Thread.currentThread() + "Hi im a worker I'm trying to get messages from manager2WorkersQueue");
         List<Message> messages = aws.getSQSMessagesList(manager2WorkersQueueUrl, 1, 10);
         if (!messages.isEmpty()) {
             Message message = messages.get(0);
@@ -81,7 +81,8 @@ public class Worker {
     private File handleError(Exception exc, String fileName) throws IOException {
         System.out.println(Thread.currentThread() + " Handling error on file: " + fileName);
         System.out.println(exc.getMessage());
-        String errorFileName = fileName + "_Error.txt";
+        int lastIndex = fileName.lastIndexOf("_");
+        String errorFileName = fileName.substring(0, lastIndex) + "_Error" + fileName.substring(lastIndex) + ".txt";
         File errorFile = new File(errorFileName);
         try (FileWriter writer = new FileWriter(errorFile)) {
             writer.write("Error Message: " + exc.getMessage());

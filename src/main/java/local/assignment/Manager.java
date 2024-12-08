@@ -38,7 +38,7 @@ public class Manager {
     // *** */
     // figure out the ami and script
     // ***
-
+    
     // Listen for tasks in the SQS queue
     protected void listenForTasksLocal() {
         System.out.println(Thread.currentThread() + "Trying to get local app message");
@@ -206,7 +206,15 @@ public class Manager {
     protected void mergeToSummaryAndUploadToS3(String outputFolderPath) {
         System.out.println(Thread.currentThread() + ": is creating the summary file");
         List<String> filesToMerge = aws.getFilesInFolder(outputFolderPath);
-        Collections.sort(filesToMerge);
+        
+        //Sorting the sub-files by their index in the file 
+        Collections.sort(filesToMerge, (String a, String b) -> {
+            int lastIndex1 = a.lastIndexOf("_");
+            int lastIndex2 = b.lastIndexOf("_");
+            Integer index1 = Integer.parseInt(a.substring(lastIndex1 + 1));
+            Integer index2 = Integer.parseInt(b.substring(lastIndex2 + 1));
+            return index1.compareTo(index2);
+        });
 
         File LocalAppInputFile = new File("LocalAppInputFile.txt");
         List<String> inputFileList = aws.getFilesInFolder(outputFolderPath.replace("/outputFiles/", "/inputFiles/"));

@@ -12,7 +12,6 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 
-import io.github.cdimascio.dotenv.Dotenv;
 import software.amazon.awssdk.core.ResponseBytes;
 import software.amazon.awssdk.core.exception.SdkException;
 import software.amazon.awssdk.regions.Region;
@@ -58,9 +57,9 @@ import software.amazon.awssdk.services.sqs.model.Message;
 import software.amazon.awssdk.services.sqs.model.QueueAttributeName;
 import software.amazon.awssdk.services.sqs.model.ReceiveMessageRequest;
 import software.amazon.awssdk.services.sqs.model.SendMessageRequest;
+    
 
 public class AWS {
-
     public Region region1 = Region.US_WEST_2;
     protected final S3Client s3;
     protected final SqsClient sqs;
@@ -68,12 +67,6 @@ public class AWS {
     protected final String bucketName;
     protected static AWS instance = null;
     protected final String ami = "ami-0412b8b02f19cbcf0";
-
-    //Loading necessary keys for AWS CLI
-    protected Dotenv dotenv = Dotenv.load();
-    protected String accessKey = dotenv.get("AWS_ACCESS_KEY_ID");
-    protected String secretKey = dotenv.get("AWS_SECRET_ACCESS_KEY");
-    protected String sessionToken = dotenv.get("AWS_SESSION_TOKEN");
 
     protected AWS() {
         this.s3 = S3Client.builder().region(region1).build();
@@ -146,15 +139,8 @@ public class AWS {
         // Return the updated user data script with credentials, region, and aws configure commands
         return "#!/bin/bash\n" +
                 "cd /home/ec2-user\n" +
-                // Set AWS credentials using aws configure
-                "aws configure set aws_access_key_id " + accessKey + "\n" +
-                "aws configure set aws_secret_access_key " + secretKey + "\n" +
-                "aws configure set aws_session_token " + sessionToken + "\n" +
-                "aws configure set region " + region1 + "\n" +
-                
                 // Download the correct JAR file from S3
                 "aws s3 cp s3://" + bucketName + "/jars/" + s3Key + " /home/ec2-user/" + s3Key + "\n" +
-                
                 // Run the JAR file
                 "java -jar /home/ec2-user/" + s3Key + "\n";
     }

@@ -120,16 +120,32 @@ public class PDFUtils {
         try {
             URL url = new URL(urlString);
             HttpURLConnection connection = (HttpURLConnection) url.openConnection();
-            connection.setRequestMethod("HEAD");
+            connection.setRequestMethod("HEAD");  // Perform a HEAD request
+            connection.setConnectTimeout(5000);  // Set connection timeout
+            connection.setReadTimeout(5000);     // Set read timeout
+
             int responseCode = connection.getResponseCode();
-            if(responseCode == HttpURLConnection.HTTP_OK)
+            
+            // If response code is HTTP_OK, the URL is valid
+            if (responseCode == HttpURLConnection.HTTP_OK) {
                 return null;
-            else 
-                return new Exception("URL returned response code: " + responseCode);
+            } 
+            
+            // Handle specific errors like 404 (Page Not Found) or 500 (Server Error)
+            else if (responseCode == HttpURLConnection.HTTP_NOT_FOUND) {
+                // If we get 404, we will check the page content
+                return new Exception("Page not found (404): " + urlString);
+            } else if (responseCode == HttpURLConnection.HTTP_INTERNAL_ERROR) {
+                return new Exception("Internal server error (500): " + urlString);
+            } else {
+                // For other non-OK responses, we throw an exception
+                return new Exception("URL returned error response code: " + responseCode + " for URL: " + urlString);
+            }
         } catch (Exception e) {
             System.out.println("Invalid URL: " + urlString);
-            return e;
+            return e;  // Return the exception for invalid URL or connection failure
         }
     }
+
 }
 

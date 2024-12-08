@@ -54,14 +54,6 @@
       <version>2.0.19</version> <!-- Ensure this is the correct version -->
     </dependency>
 
-    <!-- Dotenv-Java -->
-    <dependency>
-        <groupId>io.github.cdimascio</groupId>
-        <artifactId>dotenv-java</artifactId>
-        <version>2.2.4</version>
-    </dependency>
-
-
   </dependencies>
 
   <!-- Build section to specify Java version -->
@@ -96,7 +88,7 @@
                       <goal>java</goal>
                   </goals>
                   <configuration>
-                      <mainClass>local.assignment.LocalApp</mainClass>
+                      <mainClass>local.assignment.Worker</mainClass>
                   </configuration>
               </execution>
           </executions>
@@ -110,7 +102,7 @@
         <configuration>
             <archive>
                 <manifestEntries>
-                    <Main-Class>local.assignment.LocalApp</Main-Class>
+                    <Main-Class>local.assignment.Worker</Main-Class>
                 </manifestEntries>
             </archive>
         </configuration>
@@ -130,7 +122,7 @@
                 <configuration>
                     <transformers>
                         <transformer implementation="org.apache.maven.plugins.shade.resource.ManifestResourceTransformer">
-                            <mainClass>local.assignment.LocalApp</mainClass>
+                            <mainClass>local.assignment.Worker</mainClass>
                         </transformer>
                     </transformers>
                 </configuration>
