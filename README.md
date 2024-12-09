@@ -1,5 +1,10 @@
 # **PDF Cloud Converter**
 
+***Authors***
+Tamir Nizri - 211621552
+Eyal Segev - 315144717
+Lior Hagay - 314872367
+
 ## **Overview**  
 PDF Cloud Converter is a distributed cloud-based system for converting PDF documents into different formats (TXT, IMG, or HTML). It works by running LocalApps to upload tasks to AWS. A Manager instance on AWS handles task distribution to Worker instances, which process the PDF files. Once the tasks are completed, the Manager merges the results and sends them back to the LocalApp, which generates an HTML file with links to the converted files.
 
@@ -95,7 +100,3 @@ Limitations:
    AWS restrictions limit us to 9 worker instances.
    Network latency between AWS services (SQS and S3) may slow down processing.
 
-***Authors***
-Tamir Nizri - 211621552
-Eyal Segev - 315144717
-Lior Hagay - 314872367
