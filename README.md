@@ -52,9 +52,7 @@ Easy to set up and run—just start the LocalApp, and the Manager and Workers wi
    
    ## Build the project:
          mvn clean install
-         Upload the jars to S3:
-
-   manager.jar and worker.jar should be uploaded to S3 in the appropriate paths.
+         Upload the jars to S3 --> manager.jar and worker.jar should be uploaded to S3 in the appropriate paths.
    
 ## Run the LocalApp:
 
@@ -75,29 +73,29 @@ Execution time: 10 minutes.
 
 ***System Design***
 
-# Security:
+## Security:
    No hardcoded AWS credentials; we used IAM roles.
    AWS CLI configuration is local and secure.
-# Scalability:
+## Scalability:
    We implemented two threads in the Manager:
    One listens for tasks from LocalApps.
    The other listens for task completions from Workers.
    Tasks are handled in a thread pool, allowing parallel execution while maintaining order.
-# Fault Tolerance:
+## Fault Tolerance:
    Tasks remain in the SQS queue until successfully completed.
    If a Worker fails, its task is reassigned to another Worker.
-# Termination Process:
+## Termination Process:
    LocalApp sends a termination signal to the Manager.
    Manager ensures all tasks are completed before shutting down.
    Cleanup script (cleanup.jar) can be run manually to remove all AWS resources.
-# Threads – Pros and Cons:
-   ## Advantages-
+## Threads – Pros and Cons:
+   ### Advantages-
       1. Efficient parallelism: Tasks are processed faster using multiple threads.
       2. Scalability: Adding more threads/workers allows the system to handle larger workloads.
-   ## Disadvantages- 
+   ### Disadvantages- 
       Resource contention: Threads may compete for resources like CPU and memory.
       Latency: AWS service delays can affect task completion times.
-# Limitations:
+## Limitations:
    AWS restrictions limit us to 9 worker instances.
    Network latency between AWS services (SQS and S3) may slow down processing.
 
