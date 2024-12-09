@@ -62,16 +62,16 @@ Easy to set up and run—just start the LocalApp, and the Manager and Workers wi
 Clean up resources manually:
    Use cleanup.jar to terminate EC2 instances, delete SQS queues, and clear S3 folders.
 
-***AWS Setup Details***
+## AWS Setup Details
 AMI: Amazon Linux 2 |
 Instance Type: t2.nano |
 Worker Limit: Max of 9 instances due to AWS account restrictions.
 
-***Performance Metrics***
+## Performance Metrics
 Tested on an input file with 1000 URLs.
 Execution time: 10 minutes.
 
-#System Design
+# System Design
 
 ## Security:
    No hardcoded AWS credentials; we used IAM roles.
@@ -93,8 +93,8 @@ Execution time: 10 minutes.
       1. Efficient parallelism: Tasks are processed faster using multiple threads.
       2. Scalability: Adding more threads/workers allows the system to handle larger workloads.
    ### Disadvantages- 
-      Resource contention: Threads may compete for resources like CPU and memory.
-      Latency: AWS service delays can affect task completion times.
+      1. Resource contention: Threads may compete for resources like CPU and memory.
+      2. Latency: AWS service delays can affect task completion times.
 ## Limitations:
    AWS restrictions limit us to 9 worker instances.
    Network latency between AWS services (SQS and S3) may slow down processing.
