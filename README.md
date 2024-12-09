@@ -39,15 +39,14 @@ Easy to set up and run—just start the LocalApp, and the Manager and Workers wi
    Cloud Services: AWS S3, SQS, EC2
    
 
-***Setup Instructions***
+## Setup Instructions
 
-***Prerequisites***
-## Install:
+### Install:
    Java 17
    Maven
    AWS CLI
 
-## Configure AWS CLI:
+### Configure AWS CLI:
    Run aws configure and set your credentials and default region.
    
    ## Build the project:
@@ -57,9 +56,8 @@ Easy to set up and run—just start the LocalApp, and the Manager and Workers wi
          ### aws s3 cp /path/to/worker.jar s3://beni-haagadi/jars/worker.jar
    
 ## Run the LocalApp:
-
-### java -jar Local_App.jar <input_file> <output_file> <worker_ratio> <terminate?>
-Example: java -jar Local_App.jar input-sample.txt summaryFile.html 4
+   ### java -jar Local_App.jar <input_file> <output_file> <worker_ratio> <terminate?>
+   ### Example: java -jar Local_App.jar input-sample.txt summaryFile.html 4
 
 Clean up resources manually:
    Use cleanup.jar to terminate EC2 instances, delete SQS queues, and clear S3 folders.
