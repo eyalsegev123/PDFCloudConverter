@@ -58,7 +58,7 @@ Easy to set up and run—just start the LocalApp, and the Manager and Workers wi
    
 ## Run the LocalApp:
 
-java -jar Local_App.jar <input_file> <output_file> <worker_ratio> <terminate?>
+### java -jar Local_App.jar <input_file> <output_file> <worker_ratio> <terminate?>
 Example: java -jar Local_App.jar input-sample.txt summaryFile.html 4
 
 Clean up resources manually:
