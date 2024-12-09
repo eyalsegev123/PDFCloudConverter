@@ -63,15 +63,15 @@ Clean up resources manually:
    Use cleanup.jar to terminate EC2 instances, delete SQS queues, and clear S3 folders.
 
 ***AWS Setup Details***
-AMI: Amazon Linux 2
-Instance Type: t2.nano
+AMI: Amazon Linux 2 |
+Instance Type: t2.nano |
 Worker Limit: Max of 9 instances due to AWS account restrictions.
 
 ***Performance Metrics***
 Tested on an input file with 1000 URLs.
 Execution time: 10 minutes.
 
-***System Design***
+#System Design
 
 ## Security:
    No hardcoded AWS credentials; we used IAM roles.
