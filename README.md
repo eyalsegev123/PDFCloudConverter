@@ -50,14 +50,14 @@ Easy to set up and run—just start the LocalApp, and the Manager and Workers wi
    Run aws configure and set your credentials and default region.
    
    ## Build the project:
-         ### mvn clean install
-         Upload the jars to S3:
-         ### aws s3 cp /path/to/manager.jar s3://beni-haagadi/jars/manager.jar
-         ### aws s3 cp /path/to/worker.jar s3://beni-haagadi/jars/worker.jar
+         mvn clean install
+         // Upload the jars to S3:
+         aws s3 cp /path/to/manager.jar s3://beni-haagadi/jars/manager.jar
+         aws s3 cp /path/to/worker.jar s3://beni-haagadi/jars/worker.jar
    
    ## Run the LocalApp:
-         ### java -jar Local_App.jar <input_file> <output_file> <worker_ratio> <terminate?>
-         ### Example: java -jar Local_App.jar input-sample.txt summaryFile.html 4
+         java -jar Local_App.jar <input_file> <output_file> <worker_ratio> <terminate?>
+         // Example: java -jar Local_App.jar input-sample.txt summaryFile.html 4
 
 Clean up resources manually:
    Use cleanup.jar to terminate EC2 instances, delete SQS queues, and clear S3 folders.
