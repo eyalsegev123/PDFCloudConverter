@@ -38,7 +38,7 @@ public class Worker {
     
         try {
             File fileAfterOperation = performOperation(operation, originalUrl, fileNameToUploadWithIndex);
-            uploadAndNotify(fileAfterOperation, targetLocationInS3, fileNameToUploadWithIndex);
+            uploadAndNotify(fileAfterOperation, targetLocationInS3, fileAfterOperation.getName());
             if (fileAfterOperation.exists())
                 fileAfterOperation.delete();
         } catch (Exception e) {

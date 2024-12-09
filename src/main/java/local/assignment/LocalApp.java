@@ -162,8 +162,12 @@ public class LocalApp {
                 if (parts.length >= 3) {
                     String operation = parts[0].trim(); // First element: operation
                     String formerUrl = parts[1].trim(); // Second element: former URL
-                    String newUrl = "s3://" + aws.bucketName + "/" + parts[2].trim();   // Third element: new URL
-
+                    String newUrl;
+                    if(parts[2].startsWith("Error"))
+                        newUrl = parts[2].trim();   // Error case
+                    else 
+                        newUrl = "s3://" + aws.bucketName + "/" + parts[2].trim();   // Third element: new URL
+                    
                     // Write the HTML list item with a clear format
                     writer.printf(
                             "<li><span class=\"operation\">%s</span>: <a href=\"%s\" class=\"url\">%s</a> ----> <a href=\"%s\" class=\"url\">%s</a></li>%n",

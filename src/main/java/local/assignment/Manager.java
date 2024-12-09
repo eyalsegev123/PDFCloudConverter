@@ -206,16 +206,29 @@ public class Manager {
     protected void mergeToSummaryAndUploadToS3(String outputFolderPath) {
         System.out.println(Thread.currentThread() + ": is creating the summary file");
         List<String> filesToMerge = aws.getFilesInFolder(outputFolderPath);
-        
+        System.out.println(Thread.currentThread() + ": sorting");
         //Sorting the sub-files by their index in the file 
-        Collections.sort(filesToMerge, (String a, String b) -> {
-            int lastIndex1 = a.lastIndexOf("_");
-            int lastIndex2 = b.lastIndexOf("_");
-            Integer index1 = Integer.parseInt(a.substring(lastIndex1 + 1));
-            Integer index2 = Integer.parseInt(b.substring(lastIndex2 + 1));
-            return index1.compareTo(index2);
-        });
 
+
+        try{
+            Collections.sort(filesToMerge, (String a, String b) -> {
+                int lastIndex1 = a.lastIndexOf("_");
+                int lastDotIndex1 = a.lastIndexOf(".");
+                int lastIndex2 = b.lastIndexOf("_");
+                int lastDotIndex2 = b.lastIndexOf(".");
+                Integer index1 = Integer.parseInt(a.substring(lastIndex1 + 1, lastDotIndex1));
+                Integer index2 = Integer.parseInt(b.substring(lastIndex2 + 1, lastDotIndex2));
+                return index1.compareTo(index2);
+            });
+            System.out.println(Thread.currentThread() + ": sorted");
+        } catch (Exception e) {
+            System.err.println(Thread.currentThread() + ": Error during sorting: " + e.getMessage());
+            e.printStackTrace();
+            return;
+        }
+        System.out.println(Thread.currentThread() + ": sorted");
+
+        //Downloading input file and 
         File LocalAppInputFile = new File("LocalAppInputFile.txt");
         List<String> inputFileList = aws.getFilesInFolder(outputFolderPath.replace("/outputFiles/", "/inputFiles/"));
         aws.downloadFileFromS3(inputFileList.get(0), LocalAppInputFile);
@@ -226,6 +239,7 @@ public class Manager {
         String path = outputFolderPath.substring(outputFolderPath.indexOf("LocalApp"));
         String localAppId = path.substring("LocalApp".length(), path.indexOf("/", "LocalApp".length()));
 
+        System.out.println("Starting merge proccess in summary.txt");
         try (BufferedWriter writer = new BufferedWriter(new FileWriter(summaryFile));
                 BufferedReader inputReader = new BufferedReader(new FileReader(LocalAppInputFile))) {
 
@@ -243,6 +257,7 @@ public class Manager {
                 boolean isError = fileNameWithIndex.contains("Error");
 
                 if (isError) {
+                    System.out.println(Thread.currentThread() + ": handling error inside the merge");
                     File errorFile = new File("errorFile.txt");
                     try {
                         aws.downloadFileFromS3(newFileUrl, errorFile);
@@ -264,6 +279,7 @@ public class Manager {
                         }
                     }
                 } else {
+                    System.out.println("else - url is fine");
                     writer.write(inputLine + "\t" + newFileUrl);
                 }
 
