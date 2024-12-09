@@ -6,7 +6,7 @@ Eyal Segev - 315144717
 Lior Hagay - 314872367
 
 ## **Overview**  
-PDF Cloud Converter is a distributed cloud-based system for converting PDF documents into different formats (TXT, IMG, or HTML). It works by running LocalApps to upload tasks to AWS. A Manager instance on AWS handles task distribution to Worker instances, which process the PDF files. Once the tasks are completed, the Manager merges the results and sends them back to the LocalApp, which generates an HTML file with links to the converted files.
+PDF Cloud Converter is a distributed cloud-based system for converting PDF documents (their first page) into different formats (TXT, IMG, or HTML). It works by running LocalApps to upload tasks to AWS. A Manager instance on AWS handles task distribution to Worker instances, which process the PDF files. Once the tasks are completed, the Manager merges the results and sends them back to the LocalApp, which generates an HTML file with links to the converted files.
 
 ## **Features**  
 Distributed cloud-based system using AWS S3, SQS, and EC2.
@@ -51,8 +51,10 @@ Easy to set up and run—just start the LocalApp, and the Manager and Workers wi
    Run aws configure and set your credentials and default region.
    
    ## Build the project:
-         mvn clean install
-         Upload the jars to S3 --> manager.jar and worker.jar should be uploaded to S3 in the appropriate paths.
+         ### mvn clean install
+         Upload the jars to S3:
+         ### aws s3 cp /path/to/manager.jar s3://beni-haagadi/jars/manager.jar
+         ### aws s3 cp /path/to/worker.jar s3://beni-haagadi/jars/worker.jar
    
 ## Run the LocalApp:
 
